@@ -115,7 +115,7 @@ def _build_file(source_id: str, measurement: str, row_count: int) -> tuple[bytes
 
     parts = ["[\n"]
     for i in range(row_count):
-        ts = (now + timedelta(seconds=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts = (now - timedelta(seconds=(row_count - 1 - i))).strftime("%Y-%m-%dT%H:%M:%SZ")
         record = {
             "source_id": source_id,
             "measurement": measurement,

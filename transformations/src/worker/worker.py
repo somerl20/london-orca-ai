@@ -29,7 +29,7 @@ from botocore.client import Config
 from delta import configure_spark_with_delta_pip
 from delta.tables import DeltaTable
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, current_timestamp, to_date, to_timestamp
+from pyspark.sql.functions import col, current_timestamp, lit, to_date, to_timestamp
 from pyspark.sql.types import (
     DoubleType, DateType, StringType, StructField, StructType, TimestampType
 )
@@ -84,9 +84,41 @@ def wait_for_rabbitmq(url: str, max_wait: int = 120) -> pika.BlockingConnection:
             delay = min(delay * 2, 30)
 
 
+def _already_processed(spark: SparkSession, file_key: str, warehouse_path: str) -> bool:
+    registry_path = f"{warehouse_path}/_processed_files"
+    try:
+        return (
+            DeltaTable.forPath(spark, registry_path)
+            .toDF()
+            .filter(col("file_key") == lit(file_key))
+            .count() > 0
+        )
+    except Exception:
+        return False
+
+
+def _mark_processed(spark: SparkSession, file_key: str, warehouse_path: str) -> None:
+    registry_path = f"{warehouse_path}/_processed_files"
+    (
+        DeltaTable.createIfNotExists(spark)
+        .location(registry_path)
+        .addColumn("file_key", StringType())
+        .execute()
+    )
+    spark.createDataFrame([(file_key,)], ["file_key"]).write.format("delta").mode("append").save(registry_path)
+
+
 def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
     bucket = msg["source_bucket"] if "source_bucket" in msg else os.environ.get("S3_BUCKET", "telemetry")
     file_key = msg["file_key"]
+
+    if _already_processed(spark, file_key, warehouse_path):
+        log.info("Skipping duplicate: %s", file_key)
+        try:
+            s3.delete_object(Bucket=bucket, Key=file_key)
+        except Exception:
+            pass
+        return
 
     obj = s3.get_object(Bucket=bucket, Key=file_key)
     raw = obj["Body"].read().decode()
@@ -99,6 +131,11 @@ def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
         .option("multiline", "true")
         .json(spark.sparkContext.parallelize([raw], n_partitions))
     )
+
+    if raw_df.rdd.isEmpty():
+        log.warning("Empty file skipped: %s", file_key)
+        s3.delete_object(Bucket=bucket, Key=file_key)
+        return
 
     df = raw_df.select(
         col("measurement"),
@@ -141,6 +178,7 @@ def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
         .save(delta_path)
     )
 
+    _mark_processed(spark, file_key, warehouse_path)
     s3.delete_object(Bucket=bucket, Key=file_key)
     log.info("Processed: %s  (%d rows, %d partition(s))", file_key, df.count(), n_partitions)
 

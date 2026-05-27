@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -19,7 +20,6 @@ def spark():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _raw_json(rows=5, source_id="ship-01") -> bytes:
-    from datetime import datetime, timezone, timedelta
     now = datetime.now(timezone.utc)
     records = [
         {
@@ -182,3 +182,156 @@ class TestOnMessage:
 
         publish_kwargs = ch.basic_publish.call_args.kwargs
         assert publish_kwargs["routing_key"] == "files.dlq"
+
+
+# ── T4: Worker crash / retry ──────────────────────────────────────────────────
+
+class TestCrashRecovery:
+    def test_transient_failure_eventually_succeeds(self):
+        body = json.dumps({"file_key": "ship-01/f.json", "size": 100}).encode()
+        cb, ch = _capture_callback(retry_max=3)
+
+        call_count = [0]
+
+        def flaky(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("transient")
+
+        # First delivery (retry_count=0) → fails → nack + republish with count=1
+        with patch("worker.worker.process", side_effect=flaky):
+            cb(ch, _method(1), _props({"x-retry-count": 0}), body)
+
+        ch.basic_nack.assert_called_once_with(delivery_tag=1, requeue=False)
+        assert ch.basic_publish.call_args.kwargs["properties"].headers["x-retry-count"] == 1
+        ch.basic_ack.assert_not_called()
+        ch.reset_mock()
+
+        # Second delivery (retry_count=1) → succeeds → ack, nothing republished
+        with patch("worker.worker.process", side_effect=flaky):
+            cb(ch, _method(2), _props({"x-retry-count": 1}), body)
+
+        ch.basic_ack.assert_called_once_with(delivery_tag=2)
+        ch.basic_nack.assert_not_called()
+        ch.basic_publish.assert_not_called()
+
+
+# ── T5: Duplicate delivery ────────────────────────────────────────────────────
+
+class TestIdempotency:
+    def test_duplicate_delivery_no_duplicate_rows(self, spark, tmp_path):
+        raw = _raw_json(10)
+        s3 = _mock_s3(raw)
+        # Suppress the S3 delete so the file is still accessible on second delivery,
+        # simulating a crash after the Delta write but before the ack.
+        s3.delete_object = MagicMock()
+        msg = {"file_key": "ship-01/f.json", "size": len(raw)}
+
+        process(spark, s3, msg, str(tmp_path))  # first delivery
+        process(spark, s3, msg, str(tmp_path))  # duplicate
+
+        from delta.tables import DeltaTable
+        df = DeltaTable.forPath(spark, str(tmp_path / "measurements")).toDF()
+        assert df.count() == 10
+
+    def test_distinct_file_keys_are_not_skipped(self, spark, tmp_path):
+        for i in range(3):
+            raw = _raw_json(5, source_id=f"ship-{i:02d}")
+            process(spark, _mock_s3(raw), {"file_key": f"ship-{i:02d}/f.json", "size": len(raw)}, str(tmp_path))
+
+        from delta.tables import DeltaTable
+        assert DeltaTable.forPath(spark, str(tmp_path / "measurements")).toDF().count() == 15
+
+
+# ── T6: Invalid / malformed file ─────────────────────────────────────────────
+
+class TestInvalidFile:
+    def test_malformed_json_raises(self, spark, tmp_path):
+        s3 = _mock_s3(b"not valid json {{{")
+        with pytest.raises(Exception):
+            process(spark, s3, {"file_key": "ship-01/bad.json", "size": 100}, str(tmp_path))
+
+    def test_wrong_schema_raises(self, spark, tmp_path):
+        raw = json.dumps([{"unrelated_field": 1, "other": 2}]).encode()
+        with pytest.raises(Exception):
+            process(spark, _mock_s3(raw), {"file_key": "ship-01/bad.json", "size": len(raw)}, str(tmp_path))
+
+    def test_empty_file_is_silent_noop(self, spark, tmp_path):
+        s3 = _mock_s3(b"[]")
+        # Must not raise — empty file is skipped, not retried or sent to DLQ
+        process(spark, s3, {"file_key": "ship-01/empty.json", "size": 0}, str(tmp_path))
+        s3.delete_object.assert_called_once()
+
+    def test_pipeline_continues_after_invalid_file(self, spark, tmp_path):
+        # Bad file raises (will be retried / DLQ'd by on_message)
+        try:
+            process(spark, _mock_s3(b"not valid json"), {"file_key": "ship-01/bad.json", "size": 10}, str(tmp_path))
+        except Exception:
+            pass
+
+        # Valid file after the bad one must land correctly
+        raw = _raw_json(5)
+        process(spark, _mock_s3(raw), {"file_key": "ship-01/good.json", "size": len(raw)}, str(tmp_path))
+
+        from delta.tables import DeltaTable
+        df = DeltaTable.forPath(spark, str(tmp_path / "measurements")).toDF()
+        assert df.count() == 5
+
+    def test_invalid_file_routes_to_dlq_after_max_retries(self):
+        body = json.dumps({"file_key": "ship-01/bad.json", "size": 100}).encode()
+        cb, ch = _capture_callback(retry_max=3)
+
+        with patch("worker.worker.process", side_effect=Exception("parse error")):
+            for retry in range(4):  # retry_count 0 → 3
+                headers = {"x-retry-count": retry} if retry else {}
+                cb(ch, _method(retry), _props(headers), body)
+
+        dlq_calls = [
+            c for c in ch.basic_publish.call_args_list
+            if c.kwargs.get("routing_key") == "files.dlq"
+        ]
+        assert len(dlq_calls) == 1
+        assert "x-error" in dlq_calls[0].kwargs["properties"].headers
+
+
+# ── T7: Late arrival ──────────────────────────────────────────────────────────
+
+def _raw_json_at_time(rows: int, source_id: str, base_ts: datetime) -> bytes:
+    records = [
+        {
+            "source_id": source_id,
+            "measurement": "gps",
+            "timestamp": (base_ts + timedelta(seconds=i)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "values": {"lat": 51.5 + i * 0.01, "lon": -0.1, "speed_knots": 10.0},
+        }
+        for i in range(rows)
+    ]
+    return json.dumps(records).encode()
+
+
+class TestLateArrival:
+    def test_late_file_lands_with_original_event_ts(self, spark, tmp_path):
+        now = datetime.now(timezone.utc)
+        week_ago = now - timedelta(days=7)
+
+        # Process a current file first
+        raw_now = _raw_json_at_time(5, "ship-current", now)
+        process(spark, _mock_s3(raw_now), {"file_key": "ship-current/f.json", "size": len(raw_now)}, str(tmp_path))
+
+        # Then a late file with timestamps from last week
+        raw_old = _raw_json_at_time(5, "ship-late", week_ago)
+        process(spark, _mock_s3(raw_old), {"file_key": "ship-late/f.json", "size": len(raw_old)}, str(tmp_path))
+
+        from delta.tables import DeltaTable
+        df = DeltaTable.forPath(spark, str(tmp_path / "measurements")).toDF()
+
+        assert df.count() == 10
+
+        late_rows = df.filter(df.source_id == "ship-late").collect()
+        assert len(late_rows) == 5
+        for row in late_rows:
+            # event_ts must carry the original timestamp, not today's date
+            assert row.event_ts.date() == week_ago.date()
+            # recorded_at is ingestion time and must be recent
+            ingested_at = row.recorded_at.replace(tzinfo=timezone.utc)
+            assert (now - ingested_at).total_seconds() < 60

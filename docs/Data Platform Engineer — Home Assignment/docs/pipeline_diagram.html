@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ship Telemetry — Ingestion Pipeline</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 48px 32px 64px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 0.72rem;
+      color: #484f58;
+      margin-bottom: 52px;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── main canvas ── */
+    .canvas {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      gap: 0;
+    }
+
+    /* ── section label ── */
+    .section-label {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #30363d;
+      margin-bottom: 8px;
+    }
+
+    /* ── row of boxes ── */
+    .row {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      gap: 12px;
+    }
+
+    /* ── individual box ── */
+    .box {
+      border-radius: 8px;
+      padding: 12px 20px;
+      min-width: 130px;
+      max-width: 200px;
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      line-height: 1.4;
+      border: 1.5px solid;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .box sub {
+      font-size: 0.62rem;
+      font-weight: 400;
+      opacity: 0.7;
+      display: block;
+    }
+
+    /* colours */
+    .c-gen    { background: #161b22; border-color: #3b82f6; color: #60a5fa; }
+    .c-store  { background: #161b22; border-color: #22c55e; color: #4ade80; }
+    .c-broker { background: #161b22; border-color: #f97316; color: #fb923c; }
+    .c-worker { background: #161b22; border-color: #a855f7; color: #c084fc; }
+    .c-dlq    { background: #161b22; border-color: #ef4444; color: #f87171; }
+    .c-wh     { background: #161b22; border-color: #14b8a6; color: #2dd4bf; }
+    .c-mon    { background: #161b22; border-color: #64748b; color: #94a3b8; border-style: dashed; }
+
+    /* ── arrows ── */
+    .arrow-down {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 2px 0;
+    }
+    .arrow-down .line  { width: 2px; height: 24px; background: #30363d; }
+    .arrow-down .head  {
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid #30363d;
+    }
+    .arrow-down .lbl {
+      font-size: 0.58rem;
+      color: #484f58;
+      margin-bottom: 2px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── fan-out SVG ── */
+    .fan { width: 100%; max-width: 680px; }
+
+    /* ── error side branch ── */
+    .error-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      width: 100%;
+      max-width: 680px;
+      margin: 8px 0;
+      position: relative;
+    }
+    .main-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .side-branch {
+      display: flex;
+      align-items: center;
+      margin-left: 16px;
+    }
+    .side-h-line  { width: 40px; height: 2px; background: #ef4444; opacity: 0.45; }
+    .side-h-head  {
+      width: 0; height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 7px solid #ef4444;
+      opacity: 0.45;
+    }
+    .side-lbl { font-size: 0.58rem; color: #ef4444; opacity: 0.65; margin-right: 6px; }
+
+    /* ── monitoring badge ── */
+    .mon-wrap {
+      margin-top: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .mon-note {
+      font-size: 0.62rem;
+      color: #30363d;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── docker-compose badge ── */
+    .dc-frame {
+      margin-top: 52px;
+      border: 1px dashed #21262d;
+      border-radius: 12px;
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dc-frame .dc-lbl { font-size: 0.68rem; color: #30363d; letter-spacing: 0.1em; }
+    .dc-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ── legend ── */
+    .legend {
+      margin-top: 40px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+    }
+    .leg-item { display: flex; align-items: center; gap: 7px; font-size: 0.68rem; color: #484f58; }
+    .leg-dot  { width: 10px; height: 10px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<h1>Ship Telemetry — Ingestion Pipeline</h1>
+<div class="subtitle">General architecture &nbsp;·&nbsp; docker-compose orchestration</div>
+
+<div class="canvas">
+
+  <!-- ① GENERATOR -->
+  <div class="section-label">① Source</div>
+  <div class="row">
+    <div class="box c-gen">Generator<sub>simulates ship fleet<br>periodic JSON dumps</sub></div>
+  </div>
+
+  <div class="arrow-down">
+    <div class="lbl">write files</div>
+    <div class="line"></div>
+    <div class="head"></div>
+  </div>
+
+  <!-- ② OBJECT STORE / LANDING -->
+  <div class="section-label">② Landing</div>
+  <div class="row">
+    <div class="box c-store">Object Store<sub>durable landing zone<br>concurrent large-file writes</sub></div>
+  </div>
+
+  <div class="arrow-down">
+    <div class="lbl">bucket event notification</div>
+    <div class="line"></div>
+    <div class="head"></div>
+  </div>
+
+  <!-- ③ MESSAGE BROKER -->
+  <div class="section-label">③ Queue</div>
+  <div class="row">
+    <div class="box c-broker">Message Broker<sub>one message per file<br>at-least-once delivery</sub></div>
+  </div>
+
+  <!-- fan-out to workers -->
+  <svg class="fan" viewBox="0 0 600 56" preserveAspectRatio="none" style="display:block;">
+    <line x1="300" y1="0"  x2="300" y2="20" stroke="#30363d" stroke-width="2"/>
+    <line x1="100" y1="20" x2="500" y2="20" stroke="#30363d" stroke-width="2"/>
+    <line x1="100" y1="20" x2="100" y2="46" stroke="#30363d" stroke-width="2"/>
+    <polygon points="95,46 105,46 100,54" fill="#30363d"/>
+    <line x1="300" y1="20" x2="300" y2="46" stroke="#30363d" stroke-width="2"/>
+    <polygon points="295,46 305,46 300,54" fill="#30363d"/>
+    <line x1="500" y1="20" x2="500" y2="46" stroke="#30363d" stroke-width="2"/>
+    <polygon points="495,46 505,46 500,54" fill="#30363d"/>
+    <text x="200" y="16" text-anchor="middle" fill="#484f58" font-size="9" font-family="sans-serif">parallel dispatch</text>
+  </svg>
+
+  <!-- ④ WORKERS -->
+  <div class="section-label">④ Processing Workers &nbsp;(horizontal replicas)</div>
+  <div class="error-row">
+    <div class="main-col">
+      <div class="row">
+        <div class="box c-worker">Worker<sub>schema validation<br>chunking · transform<br>→ columnar</sub></div>
+        <div class="box c-worker">Worker<sub>schema validation<br>chunking · transform<br>→ columnar</sub></div>
+        <div class="box c-worker">Worker<sub>schema validation<br>chunking · transform<br>→ columnar</sub></div>
+      </div>
+    </div>
+    <div class="side-branch">
+      <div class="side-lbl">on failure</div>
+      <div class="side-h-line"></div>
+      <div class="side-h-head"></div>
+      <div style="margin-left:8px;">
+        <div class="box c-dlq" style="min-width:110px; font-size:0.72rem; padding:10px 14px;">
+          Dead Letter Queue<sub>retry · alert</sub>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- fan-in to warehouse -->
+  <svg class="fan" viewBox="0 0 600 56" preserveAspectRatio="none" style="display:block;">
+    <line x1="100" y1="0"  x2="100" y2="30" stroke="#30363d" stroke-width="2"/>
+    <line x1="300" y1="0"  x2="300" y2="30" stroke="#30363d" stroke-width="2"/>
+    <line x1="500" y1="0"  x2="500" y2="30" stroke="#30363d" stroke-width="2"/>
+    <line x1="100" y1="30" x2="500" y2="30" stroke="#30363d" stroke-width="2"/>
+    <line x1="300" y1="30" x2="300" y2="48" stroke="#30363d" stroke-width="2"/>
+    <polygon points="295,48 305,48 300,56" fill="#30363d"/>
+  </svg>
+
+  <!-- ⑤ WAREHOUSE -->
+  <div class="section-label">⑤ Data Warehouse</div>
+  <div class="row">
+    <div class="box c-wh" style="min-width:220px;">Columnar Warehouse<sub>partitioned by source · date · measurement<br>queryable · full SQL</sub></div>
+  </div>
+
+  <!-- ⑥ MONITORING -->
+  <div class="mon-wrap">
+    <div class="mon-note">⑥ optional</div>
+    <div class="box c-mon" style="min-width:220px;">Monitoring<sub>metrics · alerts · pipeline health</sub></div>
+  </div>
+
+  <!-- docker-compose badge -->
+  <div class="dc-frame">
+    <div class="dc-lbl">ORCHESTRATED BY</div>
+    <div class="dc-dot" style="background:#3b82f6;"></div>
+    <div class="dc-dot" style="background:#22c55e;"></div>
+    <div class="dc-dot" style="background:#f97316;"></div>
+    <div class="dc-dot" style="background:#a855f7;"></div>
+    <div class="dc-dot" style="background:#14b8a6;"></div>
+    <div class="dc-dot" style="background:#64748b;"></div>
+    <div class="dc-lbl">docker-compose</div>
+  </div>
+
+</div>
+
+<!-- legend -->
+<div class="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#3b82f6;"></div>Generator</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#22c55e;"></div>Object Store (landing)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#f97316;"></div>Message Broker</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#a855f7;"></div>Processing Workers</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#ef4444;"></div>Dead Letter Queue</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#14b8a6;"></div>Columnar Warehouse</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#64748b;"></div>Monitoring (optional)</div>
+</div>
+
+</body>
+</html>

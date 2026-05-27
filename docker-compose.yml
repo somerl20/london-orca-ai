@@ -142,7 +142,7 @@ services:
     profiles:
       - analytics
     ports:
-      - "3001:3000"   # UI → http://localhost:3001
+      - "3010:3000"   # UI → http://localhost:3010
     depends_on:
       - spark-thrift
     volumes:

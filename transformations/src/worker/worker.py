@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import signal
+import tempfile
 import time
 
 import boto3
@@ -120,24 +121,41 @@ def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
             pass
         return
 
-    obj = s3.get_object(Bucket=bucket, Key=file_key)
-    raw = obj["Body"].read().decode()
-
     row_count = msg.get("size", 0) // 150  # rough rows estimate from byte size
     n_partitions = max(1, row_count // 50_000)  # ~50K rows per partition, min 1
 
-    raw_df = (
-        spark.read
-        .option("multiline", "true")
-        .json(spark.sparkContext.parallelize([raw], n_partitions))
-    )
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        s3.download_fileobj(bucket, file_key, tmp)
+        tmp_file = tmp.name
+    try:
+        raw_df = spark.read.option("multiline", "true").json(tmp_file).cache()
+        try:
+            raw_df.count()  # force materialization before temp file is deleted
+        except Exception:
+            log.warning("Unreadable file, skipping: %s", file_key)
+            s3.delete_object(Bucket=bucket, Key=file_key)
+            return
+    finally:
+        os.unlink(tmp_file)
 
-    if raw_df.rdd.isEmpty():
-        log.warning("Empty file skipped: %s", file_key)
+    if not {"measurement", "source_id", "timestamp", "values"}.issubset(set(raw_df.columns)):
+        log.warning("Schema mismatch, skipping: %s", file_key)
         s3.delete_object(Bucket=bucket, Key=file_key)
         return
 
-    df = raw_df.select(
+    valid_df = raw_df.filter(
+        col("measurement").isNotNull() &
+        col("source_id").isNotNull() &
+        col("timestamp").isNotNull() &
+        col("values").isNotNull()
+    )
+
+    if valid_df.rdd.isEmpty():
+        log.warning("No valid records in file, skipping: %s", file_key)
+        s3.delete_object(Bucket=bucket, Key=file_key)
+        return
+
+    df = valid_df.select(
         col("measurement"),
         col("source_id"),
         to_timestamp(col("timestamp")).alias("event_ts"),
@@ -178,6 +196,8 @@ def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
         .save(delta_path)
     )
 
+    # NOTE: not atomic — a crash here causes duplicate rows on redelivery.
+    # Acceptable; deduplicate downstream with dropDuplicates(["source_id", "event_ts"]).
     _mark_processed(spark, file_key, warehouse_path)
     s3.delete_object(Bucket=bucket, Key=file_key)
     log.info("Processed: %s  (%d rows, %d partition(s))", file_key, df.count(), n_partitions)
@@ -197,7 +217,7 @@ def main() -> None:
     ch = conn.channel()
     ch.queue_declare(queue=queue, durable=True)
     ch.queue_declare(queue=dlq, durable=True)
-    ch.basic_qos(prefetch_count=1)
+    ch.basic_qos(prefetch_count=5)
 
     def on_message(ch, method, properties, body):
         headers = properties.headers or {}
@@ -210,27 +230,37 @@ def main() -> None:
             log.error("Failed (attempt %d/%d): %s", retry_count + 1, retry_max, exc)
             if retry_count >= retry_max:
                 log.error("Max retries reached — sending to DLQ: %s", body[:200])
+                try:
+                    ch.basic_publish(
+                        exchange="",
+                        routing_key=dlq,
+                        body=body,
+                        properties=pika.BasicProperties(
+                            delivery_mode=2,
+                            headers={"x-retry-count": retry_count, "x-error": str(exc)},
+                        ),
+                    )
+                except Exception:
+                    log.exception("DLQ publish failed — requeuing to avoid message loss")
+                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                    return
                 ch.basic_ack(delivery_tag=method.delivery_tag)
-                ch.basic_publish(
-                    exchange="",
-                    routing_key=dlq,
-                    body=body,
-                    properties=pika.BasicProperties(
-                        delivery_mode=2,
-                        headers={"x-retry-count": retry_count, "x-error": str(exc)},
-                    ),
-                )
             else:
+                try:
+                    ch.basic_publish(
+                        exchange="",
+                        routing_key=queue,
+                        body=body,
+                        properties=pika.BasicProperties(
+                            delivery_mode=2,
+                            headers={"x-retry-count": retry_count + 1},
+                        ),
+                    )
+                except Exception:
+                    log.exception("Retry publish failed — requeuing original to avoid message loss")
+                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                    return
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-                ch.basic_publish(
-                    exchange="",
-                    routing_key=queue,
-                    body=body,
-                    properties=pika.BasicProperties(
-                        delivery_mode=2,
-                        headers={"x-retry-count": retry_count + 1},
-                    ),
-                )
 
     ch.basic_consume(queue=queue, on_message_callback=on_message)
 

@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from worker.worker import process
@@ -35,7 +35,9 @@ def _raw_json(rows=5, source_id="ship-01") -> bytes:
 
 def _mock_s3(raw: bytes) -> MagicMock:
     s3 = MagicMock()
-    s3.get_object.return_value = {"Body": MagicMock(read=MagicMock(return_value=raw))}
+    def _download(bucket, key, fileobj):
+        fileobj.write(raw)
+    s3.download_fileobj.side_effect = _download
     return s3
 
 
@@ -131,7 +133,7 @@ class TestProcess:
         msg = {"file_key": "ship-01/f.json", "source_bucket": "other-bucket", "size": len(raw)}
         process(spark, s3, msg, str(tmp_path))
 
-        s3.get_object.assert_called_once_with(Bucket="other-bucket", Key="ship-01/f.json")
+        s3.download_fileobj.assert_called_once_with("other-bucket", "ship-01/f.json", ANY)
 
     def test_appends_across_multiple_batches(self, spark, tmp_path):
         for i in range(3):
@@ -246,15 +248,16 @@ class TestIdempotency:
 # ── T6: Invalid / malformed file ─────────────────────────────────────────────
 
 class TestInvalidFile:
-    def test_malformed_json_raises(self, spark, tmp_path):
+    def test_malformed_json_skips_silently(self, spark, tmp_path):
         s3 = _mock_s3(b"not valid json {{{")
-        with pytest.raises(Exception):
-            process(spark, s3, {"file_key": "ship-01/bad.json", "size": 100}, str(tmp_path))
+        process(spark, s3, {"file_key": "ship-01/bad.json", "size": 100}, str(tmp_path))
+        s3.delete_object.assert_called_once()
 
-    def test_wrong_schema_raises(self, spark, tmp_path):
+    def test_wrong_schema_drops_silently(self, spark, tmp_path):
         raw = json.dumps([{"unrelated_field": 1, "other": 2}]).encode()
-        with pytest.raises(Exception):
-            process(spark, _mock_s3(raw), {"file_key": "ship-01/bad.json", "size": len(raw)}, str(tmp_path))
+        s3 = _mock_s3(raw)
+        process(spark, s3, {"file_key": "ship-01/bad.json", "size": len(raw)}, str(tmp_path))
+        s3.delete_object.assert_called_once()
 
     def test_empty_file_is_silent_noop(self, spark, tmp_path):
         s3 = _mock_s3(b"[]")
@@ -263,11 +266,8 @@ class TestInvalidFile:
         s3.delete_object.assert_called_once()
 
     def test_pipeline_continues_after_invalid_file(self, spark, tmp_path):
-        # Bad file raises (will be retried / DLQ'd by on_message)
-        try:
-            process(spark, _mock_s3(b"not valid json"), {"file_key": "ship-01/bad.json", "size": 10}, str(tmp_path))
-        except Exception:
-            pass
+        # Bad file is skipped silently; the next valid file must still land correctly
+        process(spark, _mock_s3(b"not valid json"), {"file_key": "ship-01/bad.json", "size": 10}, str(tmp_path))
 
         # Valid file after the bad one must land correctly
         raw = _raw_json(5)
@@ -307,6 +307,32 @@ def _raw_json_at_time(rows: int, source_id: str, base_ts: datetime) -> bytes:
         for i in range(rows)
     ]
     return json.dumps(records).encode()
+
+
+class TestMessageSafety:
+    def test_retry_publish_failure_requeues_original(self):
+        """Publish failure during retry must not lose the original message."""
+        body = json.dumps({"file_key": "ship-01/f.json", "size": 100}).encode()
+        cb, ch = _capture_callback(retry_max=3)
+        ch.basic_publish.side_effect = Exception("broker down")
+
+        with patch("worker.worker.process", side_effect=RuntimeError("processing error")):
+            cb(ch, _method(1), _props({"x-retry-count": 0}), body)
+
+        ch.basic_ack.assert_not_called()
+        ch.basic_nack.assert_called_once_with(delivery_tag=1, requeue=True)
+
+    def test_dlq_publish_failure_requeues_original(self):
+        """Publish failure during DLQ routing must not lose the original message."""
+        body = json.dumps({"file_key": "ship-01/f.json", "size": 100}).encode()
+        cb, ch = _capture_callback(retry_max=3)
+        ch.basic_publish.side_effect = Exception("broker down")
+
+        with patch("worker.worker.process", side_effect=RuntimeError("permanent error")):
+            cb(ch, _method(1), _props({"x-retry-count": 3}), body)
+
+        ch.basic_ack.assert_not_called()
+        ch.basic_nack.assert_called_once_with(delivery_tag=1, requeue=True)
 
 
 class TestLateArrival:

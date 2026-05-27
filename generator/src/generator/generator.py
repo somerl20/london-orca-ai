@@ -24,6 +24,7 @@ import random
 import signal
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -149,12 +150,26 @@ def _make_s3() -> boto3.client:
 
 
 def _ensure_bucket(s3, bucket: str) -> None:
-    """Create *bucket* in S3 if it does not already exist."""
+    """Create *bucket* in S3 if it does not already exist, then set a 1-day TTL."""
     try:
         s3.head_bucket(Bucket=bucket)
     except ClientError:
         s3.create_bucket(Bucket=bucket)
         log.info("Created bucket: %s", bucket)
+    try:
+        s3.put_bucket_lifecycle_configuration(
+            Bucket=bucket,
+            LifecycleConfiguration={
+                "Rules": [{
+                    "ID": "expire-orphaned-files",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": ""},
+                    "Expiration": {"Days": 1},
+                }]
+            },
+        )
+    except Exception as exc:
+        log.warning("Could not set bucket TTL (storage may not support it): %s", exc)
 
 
 def _wait_for_s3(bucket: str, max_wait: int = MAX_WAIT_SECONDS) -> boto3.client:
@@ -187,7 +202,7 @@ def _build_file(
     """Serialise *row_count* telemetry records as a JSON array."""
     now = datetime.now(timezone.utc)
     filename = (
-        f"{source_id}_{measurement}_{now.strftime('%Y%m%dT%H%M%SZ')}.json"
+        f"{source_id}_{measurement}_{now.strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}.json"
     )
     schema_fn = MEASUREMENT_SCHEMAS[measurement]
 

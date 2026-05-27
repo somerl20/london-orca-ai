@@ -61,6 +61,7 @@ services:
     restart: on-failure
 
   # ─── Transform Worker (RabbitMQ → SeaweedFS → PySpark → Delta Lake) ──────────
+  # Scale: docker compose up --scale worker=3
   worker:
     build: ./transformations
     depends_on:

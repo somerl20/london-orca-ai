@@ -97,7 +97,7 @@ class TestProcess:
         from delta.tables import DeltaTable
         cols = set(DeltaTable.forPath(spark, str(tmp_path / "measurements")).toDF().columns)
         assert cols == {
-            "measurement", "source_id", "event_ts", "date",
+            "file_key", "measurement", "source_id", "event_ts", "date",
             "latitude", "longitude", "speed_knots", "recorded_at",
         }
 
@@ -170,6 +170,7 @@ class TestOnMessage:
 
         publish_kwargs = ch.basic_publish.call_args.kwargs
         assert publish_kwargs["routing_key"] == "files"
+        assert publish_kwargs["mandatory"] is True
         assert publish_kwargs["properties"].headers["x-retry-count"] == 1
 
     def test_max_retries_routes_to_dlq(self):
@@ -184,6 +185,7 @@ class TestOnMessage:
 
         publish_kwargs = ch.basic_publish.call_args.kwargs
         assert publish_kwargs["routing_key"] == "files.dlq"
+        assert publish_kwargs["mandatory"] is True
 
 
 # ── T4: Worker crash / retry ──────────────────────────────────────────────────
@@ -310,6 +312,10 @@ def _raw_json_at_time(rows: int, source_id: str, base_ts: datetime) -> bytes:
 
 
 class TestMessageSafety:
+    def test_consumer_enables_publisher_confirms(self):
+        _, ch = _capture_callback()
+        ch.confirm_delivery.assert_called_once()
+
     def test_retry_publish_failure_requeues_original(self):
         """Publish failure during retry must not lose the original message."""
         body = json.dumps({"file_key": "ship-01/f.json", "size": 100}).encode()

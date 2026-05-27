@@ -53,6 +53,8 @@ ROWS_BY_SIZE: dict[str, int] = {
 MAX_WAIT_SECONDS: int = 120
 INITIAL_RETRY_DELAY: int = 2
 MAX_RETRY_DELAY: int = 30
+PUBLISH_MAX_WAIT_SECONDS: int = 60
+RECONCILE_INTERVAL_SECONDS: int = 60
 MIN_RATE: float = 0.1
 BYTES_PER_KB: int = 1024
 SECONDS_PER_MINUTE: float = 60.0
@@ -236,6 +238,29 @@ def _upload_file(
     return file_key
 
 
+def _metadata_from_key(file_key: str, size: int) -> tuple[str, str, int]:
+    """Recover publish metadata from the S3 object key."""
+    source_id, _, filename = file_key.partition("/")
+    remainder = filename.removeprefix(f"{source_id}_")
+    measurement = remainder.split("_", 1)[0]
+    if measurement not in MEASUREMENT_SCHEMAS:
+        measurement = next(iter(MEASUREMENT_SCHEMAS))
+    return source_id, measurement, size
+
+
+def _publish_confirmed(ch, queue: str, body: str) -> None:
+    """Publish a durable message and require RabbitMQ publisher confirmation."""
+    confirmed = ch.basic_publish(
+        exchange="",
+        routing_key=queue,
+        body=body,
+        properties=pika.BasicProperties(delivery_mode=2),
+        mandatory=True,
+    )
+    if confirmed is False:
+        raise RuntimeError(f"RabbitMQ did not confirm publish to {queue}")
+
+
 def _publish_metadata(
     ch,
     queue: str,
@@ -252,12 +277,29 @@ def _publish_metadata(
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "size": data_size,
     })
-    ch.basic_publish(
-        exchange="",
-        routing_key=queue,
-        body=body,
-        properties=pika.BasicProperties(delivery_mode=2),
+    _retry_until(
+        lambda: _publish_confirmed(ch, queue, body),
+        "RabbitMQ publish",
+        PUBLISH_MAX_WAIT_SECONDS,
     )
+
+
+def _reconcile_orphaned_files(s3, ch, bucket: str, queue: str, prefix: str) -> None:
+    """Republish queue messages for existing S3 objects that may be orphaned."""
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            file_key = obj["Key"]
+            source_id, measurement, size = _metadata_from_key(file_key, obj.get("Size", 0))
+            _publish_metadata(ch, queue, file_key, source_id, measurement, size)
+
+
+def _try_reconcile_orphaned_files(s3, ch, bucket: str, queue: str, prefix: str) -> None:
+    """Run reconciliation without stopping the ship loop on transient failures."""
+    try:
+        _reconcile_orphaned_files(s3, ch, bucket, queue, prefix)
+    except Exception as exc:
+        log.warning("S3 reconciliation failed for %s: %s", prefix, exc)
 
 
 def _run_one_cycle(
@@ -321,6 +363,10 @@ def _ship_loop(
     ch = conn.channel()
     ch.queue_declare(queue=queue, durable=True)
     ch.queue_declare(queue=f"{queue}.dlq", durable=True)
+    ch.confirm_delivery()
+    source_prefix = f"{source_id}/"
+    _try_reconcile_orphaned_files(s3, ch, bucket, queue, source_prefix)
+    last_reconcile = time.monotonic()
 
     rate = base_rate * (1 + random.uniform(-jitter, jitter))
     interval = SECONDS_PER_MINUTE / max(rate, MIN_RATE)
@@ -334,6 +380,9 @@ def _ship_loop(
         _run_one_cycle(
             s3, ch, source_id, measurement, row_count, bucket, queue, counter
         )
+        if time.monotonic() - last_reconcile >= RECONCILE_INTERVAL_SECONDS:
+            _try_reconcile_orphaned_files(s3, ch, bucket, queue, source_prefix)
+            last_reconcile = time.monotonic()
         stop.wait(max(0.0, interval - (time.monotonic() - t0)))
 
     log.info("%s stopped", source_id)

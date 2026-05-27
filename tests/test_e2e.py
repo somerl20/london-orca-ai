@@ -76,7 +76,7 @@ class TestSingleMessagePipeline:
 
         assert df.count() == self.ROW_COUNT
         assert set(df.columns) == {
-            "measurement", "source_id", "event_ts", "date",
+            "file_key", "measurement", "source_id", "event_ts", "date",
             "latitude", "longitude", "speed_knots", "recorded_at",
         }
         assert df.filter(df.source_id == self.SOURCE_ID).count() == self.ROW_COUNT

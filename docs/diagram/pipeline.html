@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pipeline Diagrams</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --ink: #172033;
+      --muted: #647084;
+      --line: #aab7ca;
+      --panel: #ffffff;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --orange: #f26b21;
+      --purple: #7c3aed;
+      --teal: #0f9f9a;
+      --red: #dc2626;
+      --amber: #b7791f;
+      --gray: #667085;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      display: grid;
+      gap: 18px;
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    section {
+      overflow-x: auto;
+      border: 1px solid #dde5f1;
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    svg.diagram {
+      display: block;
+      min-width: 1160px;
+      width: 100%;
+      height: auto;
+    }
+
+    .title {
+      font-size: 26px;
+      font-weight: 800;
+      fill: var(--ink);
+    }
+
+    .label {
+      font-size: 15px;
+      font-weight: 760;
+      fill: var(--ink);
+    }
+
+    .sub {
+      font-size: 12px;
+      fill: var(--muted);
+    }
+
+    .tiny {
+      font-size: 11px;
+      fill: var(--muted);
+    }
+
+    .decision-text {
+      font-size: 15px;
+      font-weight: 800;
+      fill: var(--ink);
+    }
+
+    .node {
+      fill: #fff;
+      stroke: #d4ddeb;
+      stroke-width: 1.5;
+      rx: 8;
+    }
+
+    .node.blue { stroke: var(--blue); }
+    .node.green { stroke: var(--green); }
+    .node.orange { stroke: var(--orange); }
+    .node.purple { stroke: var(--purple); }
+    .node.teal { stroke: var(--teal); }
+    .node.red { stroke: var(--red); }
+    .node.amber { stroke: var(--amber); }
+    .node.gray { stroke: var(--gray); }
+
+    .topbar.blue { fill: var(--blue); }
+    .topbar.green { fill: var(--green); }
+    .topbar.orange { fill: var(--orange); }
+    .topbar.purple { fill: var(--purple); }
+    .topbar.teal { fill: var(--teal); }
+    .topbar.red { fill: var(--red); }
+    .topbar.amber { fill: var(--amber); }
+    .topbar.gray { fill: var(--gray); }
+
+    .arrow {
+      stroke: var(--line);
+      stroke-width: 2.4;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+
+    .arrow.good {
+      stroke: var(--green);
+      marker-end: url(#arrow-good);
+    }
+
+    .arrow.warn {
+      stroke: var(--amber);
+      stroke-dasharray: 6 5;
+      marker-end: url(#arrow-warn);
+    }
+
+    .arrow.retry {
+      stroke: var(--orange);
+      stroke-dasharray: 3 4;
+      marker-end: url(#arrow-retry);
+    }
+
+    .arrow.bad {
+      stroke: var(--red);
+      stroke-dasharray: 7 5;
+      marker-end: url(#arrow-bad);
+    }
+
+    .badge {
+      fill: #eef3fa;
+      stroke: #ccd6e5;
+      stroke-width: 1;
+      rx: 13;
+    }
+
+    .badge-text {
+      font-size: 11px;
+      font-weight: 800;
+      fill: #40506a;
+    }
+
+    .lane {
+      fill: #fafcff;
+      stroke: #e2e8f2;
+      stroke-width: 1;
+      rx: 8;
+    }
+
+    .icon-bg {
+      fill: #f4f7fb;
+      stroke: #dce5f1;
+      stroke-width: 1;
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <defs>
+      <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+        <path d="M0 0 L12 6 L0 12 z" fill="#aab7ca"/>
+      </marker>
+      <marker id="arrow-good" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+        <path d="M0 0 L12 6 L0 12 z" fill="#16a34a"/>
+      </marker>
+      <marker id="arrow-warn" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+        <path d="M0 0 L12 6 L0 12 z" fill="#b7791f"/>
+      </marker>
+      <marker id="arrow-retry" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+        <path d="M0 0 L12 6 L0 12 z" fill="#f26b21"/>
+      </marker>
+      <marker id="arrow-bad" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+        <path d="M0 0 L12 6 L0 12 z" fill="#dc2626"/>
+      </marker>
+
+      <symbol id="ship" viewBox="0 0 64 64">
+        <rect x="22" y="10" width="20" height="18" rx="2" fill="#2563eb"/>
+        <path d="M12 33h40l-7 13H19z" fill="#3b82f6"/>
+        <path d="M14 48c5 3 9 3 14 0 5 3 9 3 14 0 4 3 8 3 12 0" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round"/>
+        <path d="M28 16h8M18 33l5-8h18l5 8" fill="none" stroke="#dbeafe" stroke-width="3" stroke-linecap="round"/>
+      </symbol>
+
+      <symbol id="s3" viewBox="0 0 64 64">
+        <ellipse cx="32" cy="14" rx="20" ry="8" fill="#16a34a"/>
+        <path d="M12 14v30c0 5 9 9 20 9s20-4 20-9V14" fill="#22c55e"/>
+        <ellipse cx="32" cy="44" rx="20" ry="8" fill="#15803d"/>
+        <path d="M19 24c3 3 8 4 13 4s10-1 13-4M19 34c3 3 8 4 13 4s10-1 13-4" fill="none" stroke="#dcfce7" stroke-width="3" stroke-linecap="round"/>
+        <text x="32" y="47" text-anchor="middle" font-size="11" font-family="Arial" font-weight="700" fill="#fff">S3</text>
+      </symbol>
+
+      <symbol id="rabbitmq" viewBox="0 0 64 64">
+        <rect x="8" y="8" width="48" height="48" rx="8" fill="#f26b21"/>
+        <rect x="18" y="17" width="7" height="14" rx="2" fill="#fff"/>
+        <rect x="29" y="17" width="7" height="14" rx="2" fill="#fff"/>
+        <rect x="18" y="33" width="28" height="12" rx="3" fill="#fff"/>
+        <circle cx="38" cy="39" r="3" fill="#f26b21"/>
+      </symbol>
+
+      <symbol id="spark" viewBox="0 0 64 64">
+        <path d="M32 5l5 20 18-9-11 17 16 7-20 2 3 17-11-14-14 13 6-18-20-4 18-7-7-18 15 13z" fill="#f59e0b"/>
+        <path d="M32 16l3 13 11-5-7 10 10 4-13 1 2 11-7-9-9 8 4-12-12-3 11-4-4-11 9 8z" fill="#7c3aed"/>
+      </symbol>
+
+      <symbol id="delta" viewBox="0 0 64 64">
+        <path d="M32 8l24 48H8z" fill="#14b8a6"/>
+        <path d="M32 23l12 24H20z" fill="#fff"/>
+        <path d="M32 31l7 14H25z" fill="#0f766e"/>
+      </symbol>
+
+      <symbol id="prometheus" viewBox="0 0 64 64">
+        <circle cx="32" cy="32" r="25" fill="#e6522c"/>
+        <path d="M32 14c8 9 9 17 2 24 3-9-3-13-3-22-7 7-11 15-4 24-10-5-10-18 5-26z" fill="#fff"/>
+        <path d="M22 43h20c-2 5-6 8-10 8s-8-3-10-8z" fill="#fff"/>
+      </symbol>
+
+      <symbol id="metabase" viewBox="0 0 64 64">
+        <circle cx="32" cy="32" r="24" fill="#509ee3"/>
+        <path d="M20 38l8-13 8 9 8-16" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="20" cy="38" r="3" fill="#fff"/>
+        <circle cx="28" cy="25" r="3" fill="#fff"/>
+        <circle cx="36" cy="34" r="3" fill="#fff"/>
+        <circle cx="44" cy="18" r="3" fill="#fff"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <main>
+    <section>
+      <svg class="diagram" viewBox="0 0 1320 420" role="img" aria-label="End-to-end pipeline diagram">
+        <text class="title" x="34" y="48">1. E2E</text>
+
+        <rect class="node blue" x="36" y="120" width="180" height="120"/>
+        <rect class="topbar blue" x="36" y="120" width="180" height="7" rx="4"/>
+        <use href="#ship" x="58" y="145" width="48" height="48"/>
+        <text class="label" x="118" y="164">Generator</text>
+        <text class="sub" x="118" y="185">ships x N</text>
+        <text class="tiny" x="118" y="204">JSON files</text>
+
+        <path class="arrow good" d="M216 180H315"/>
+        <text class="tiny" x="238" y="165">upload</text>
+
+        <rect class="node green" x="318" y="120" width="180" height="120"/>
+        <rect class="topbar green" x="318" y="120" width="180" height="7" rx="4"/>
+        <use href="#s3" x="340" y="145" width="48" height="48"/>
+        <text class="label" x="400" y="164">SeaweedFS</text>
+        <text class="sub" x="400" y="185">telemetry/</text>
+        <text class="tiny" x="400" y="204">raw landing</text>
+
+        <path class="arrow good" d="M498 180H597"/>
+        <text class="tiny" x="518" y="165">metadata</text>
+
+        <rect class="node orange" x="600" y="120" width="180" height="120"/>
+        <rect class="topbar orange" x="600" y="120" width="180" height="7" rx="4"/>
+        <use href="#rabbitmq" x="622" y="145" width="48" height="48"/>
+        <text class="label" x="682" y="164">RabbitMQ</text>
+        <text class="sub" x="682" y="185">files</text>
+        <text class="tiny" x="682" y="204">durable msg</text>
+
+        <path class="arrow good" d="M780 180H879"/>
+        <text class="tiny" x="805" y="165">consume</text>
+
+        <rect class="node purple" x="882" y="120" width="180" height="120"/>
+        <rect class="topbar purple" x="882" y="120" width="180" height="7" rx="4"/>
+        <use href="#spark" x="904" y="145" width="48" height="48"/>
+        <text class="label" x="964" y="164">Worker</text>
+        <text class="sub" x="964" y="185">PySpark</text>
+        <text class="tiny" x="964" y="204">ack after write</text>
+
+        <path class="arrow good" d="M1062 180H1161"/>
+        <text class="tiny" x="1088" y="165">append</text>
+
+        <rect class="node teal" x="1164" y="120" width="120" height="120"/>
+        <rect class="topbar teal" x="1164" y="120" width="120" height="7" rx="4"/>
+        <use href="#delta" x="1185" y="145" width="48" height="48"/>
+        <text class="label" x="1224" y="216" text-anchor="middle">Delta</text>
+
+        <path class="arrow warn" d="M408 240V318H146"/>
+        <rect class="badge" x="64" y="302" width="164" height="28"/>
+        <text class="badge-text" x="146" y="321" text-anchor="middle">orphan + TTL</text>
+
+        <path class="arrow retry" d="M970 240V316H692V244"/>
+        <rect class="badge" x="780" y="302" width="182" height="28"/>
+        <text class="badge-text" x="871" y="321" text-anchor="middle">retry x-retry-count</text>
+
+        <path class="arrow bad" d="M692 240V352H1140"/>
+        <rect class="node red" x="1144" y="324" width="108" height="58"/>
+        <rect class="topbar red" x="1144" y="324" width="108" height="7" rx="4"/>
+        <text class="label" x="1198" y="360" text-anchor="middle">files.dlq</text>
+      </svg>
+    </section>
+
+    <section>
+      <svg class="diagram" viewBox="0 0 1320 520" role="img" aria-label="Generator diagram">
+        <text class="title" x="34" y="48">2. Generator</text>
+
+        <rect class="node blue" x="48" y="108" width="150" height="88"/>
+        <rect class="topbar blue" x="48" y="108" width="150" height="7" rx="4"/>
+        <text class="label" x="123" y="145" text-anchor="middle">config</text>
+        <text class="sub" x="123" y="166" text-anchor="middle">SOURCES/RATE/SIZE</text>
+
+        <path class="arrow good" d="M198 152H284"/>
+        <rect class="node blue" x="288" y="108" width="150" height="88"/>
+        <rect class="topbar blue" x="288" y="108" width="150" height="7" rx="4"/>
+        <use href="#ship" x="308" y="128" width="42" height="42"/>
+        <text class="label" x="376" y="145" text-anchor="middle">thread</text>
+        <text class="sub" x="376" y="166" text-anchor="middle">ship-01..N</text>
+
+        <path class="arrow good" d="M438 152H524"/>
+        <rect class="node green" x="528" y="108" width="150" height="88"/>
+        <rect class="topbar green" x="528" y="108" width="150" height="7" rx="4"/>
+        <use href="#s3" x="548" y="128" width="42" height="42"/>
+        <text class="label" x="616" y="145" text-anchor="middle">S3 ready?</text>
+        <text class="sub" x="616" y="166" text-anchor="middle">bucket + TTL</text>
+
+        <path class="arrow good" d="M678 152H764"/>
+        <rect class="node orange" x="768" y="108" width="150" height="88"/>
+        <rect class="topbar orange" x="768" y="108" width="150" height="7" rx="4"/>
+        <use href="#rabbitmq" x="788" y="128" width="42" height="42"/>
+        <text class="label" x="856" y="145" text-anchor="middle">RMQ ready?</text>
+        <text class="sub" x="856" y="166" text-anchor="middle">files + dlq</text>
+
+        <path class="arrow good" d="M918 152H1004"/>
+        <rect class="node blue" x="1008" y="108" width="150" height="88"/>
+        <rect class="topbar blue" x="1008" y="108" width="150" height="7" rx="4"/>
+        <text class="label" x="1083" y="145" text-anchor="middle">loop</text>
+        <text class="sub" x="1083" y="166" text-anchor="middle">until stop</text>
+
+        <path class="arrow retry" d="M604 108V76H528"/>
+        <text class="tiny" x="514" y="80" text-anchor="end">backoff 2..30s</text>
+        <path class="arrow retry" d="M844 108V76H768"/>
+        <text class="tiny" x="754" y="80" text-anchor="end">backoff 2..30s</text>
+
+        <rect class="lane" x="112" y="268" width="1096" height="160"/>
+        <rect class="node blue" x="154" y="306" width="154" height="82"/>
+        <rect class="topbar blue" x="154" y="306" width="154" height="7" rx="4"/>
+        <text class="label" x="231" y="338" text-anchor="middle">build JSON</text>
+        <text class="sub" x="231" y="360" text-anchor="middle">100 / 30K / 250K</text>
+
+        <path class="arrow good" d="M308 347H396"/>
+        <rect class="node green" x="400" y="306" width="154" height="82"/>
+        <rect class="topbar green" x="400" y="306" width="154" height="7" rx="4"/>
+        <use href="#s3" x="421" y="323" width="36" height="36"/>
+        <text class="label" x="496" y="338" text-anchor="middle">upload</text>
+        <text class="sub" x="496" y="360" text-anchor="middle">source/file.json</text>
+
+        <path class="arrow good" d="M554 347H642"/>
+        <rect class="node orange" x="646" y="306" width="154" height="82"/>
+        <rect class="topbar orange" x="646" y="306" width="154" height="7" rx="4"/>
+        <use href="#rabbitmq" x="666" y="323" width="36" height="36"/>
+        <text class="label" x="742" y="338" text-anchor="middle">publish</text>
+        <text class="sub" x="742" y="360" text-anchor="middle">file_key + size</text>
+
+        <path class="arrow good" d="M800 347H888"/>
+        <rect class="node blue" x="892" y="306" width="154" height="82"/>
+        <rect class="topbar blue" x="892" y="306" width="154" height="7" rx="4"/>
+        <text class="label" x="969" y="338" text-anchor="middle">sleep</text>
+        <text class="sub" x="969" y="360" text-anchor="middle">60 / rate</text>
+
+        <path class="arrow good" d="M1046 347H1120V282H231V302"/>
+
+        <path class="arrow warn" d="M724 388V464H231V392"/>
+        <rect class="badge" x="432" y="450" width="286" height="28"/>
+        <text class="badge-text" x="575" y="469" text-anchor="middle">cycle error: log + next interval</text>
+
+        <path class="arrow warn" d="M477 388V484H1092V196"/>
+        <rect class="badge" x="826" y="470" width="224" height="28"/>
+        <text class="badge-text" x="938" y="489" text-anchor="middle">upload yes / publish no</text>
+      </svg>
+    </section>
+
+    <section>
+      <svg class="diagram" viewBox="0 0 1320 430" role="img" aria-label="Data lake diagram">
+        <text class="title" x="34" y="48">3. Datalake</text>
+
+        <rect class="node green" x="96" y="110" width="210" height="132"/>
+        <rect class="topbar green" x="96" y="110" width="210" height="7" rx="4"/>
+        <use href="#s3" x="122" y="142" width="56" height="56"/>
+        <text class="label" x="210" y="152">SeaweedFS</text>
+        <text class="sub" x="210" y="174">S3 :8333</text>
+        <text class="tiny" x="210" y="194">master :9333</text>
+        <text class="tiny" x="210" y="212">volume :8080</text>
+
+        <path class="arrow good" d="M306 176H428"/>
+        <text class="tiny" x="338" y="160">credentials</text>
+
+        <rect class="node green" x="432" y="110" width="210" height="132"/>
+        <rect class="topbar green" x="432" y="110" width="210" height="7" rx="4"/>
+        <text class="label" x="537" y="154" text-anchor="middle">pipeline-service</text>
+        <text class="sub" x="537" y="176" text-anchor="middle">any / any</text>
+        <text class="tiny" x="537" y="198" text-anchor="middle">admin read write list</text>
+
+        <path class="arrow good" d="M642 176H764"/>
+        <text class="tiny" x="684" y="160">objects</text>
+
+        <rect class="node green" x="768" y="110" width="210" height="132"/>
+        <rect class="topbar green" x="768" y="110" width="210" height="7" rx="4"/>
+        <text class="label" x="873" y="154" text-anchor="middle">telemetry</text>
+        <text class="sub" x="873" y="176" text-anchor="middle">ship/file.json</text>
+        <text class="tiny" x="873" y="198" text-anchor="middle">raw JSON arrays</text>
+
+        <path class="arrow good" d="M978 176H1100"/>
+        <text class="tiny" x="1014" y="160">download</text>
+
+        <rect class="node purple" x="1104" y="110" width="130" height="132"/>
+        <rect class="topbar purple" x="1104" y="110" width="130" height="7" rx="4"/>
+        <use href="#spark" x="1143" y="136" width="50" height="50"/>
+        <text class="label" x="1169" y="212" text-anchor="middle">Worker</text>
+
+        <path class="arrow good" d="M1169 242V324H873V246"/>
+        <rect class="badge" x="740" y="310" width="266" height="28"/>
+        <text class="badge-text" x="873" y="329" text-anchor="middle">processed / duplicate / skipped: delete</text>
+
+        <path class="arrow warn" d="M873 242V372H210V246"/>
+        <rect class="badge" x="420" y="358" width="244" height="28"/>
+        <text class="badge-text" x="542" y="377" text-anchor="middle">orphan: lifecycle TTL</text>
+
+        <path class="arrow retry" d="M1104 198H1018V286H1169V246"/>
+        <rect class="badge" x="1016" y="272" width="214" height="28"/>
+        <text class="badge-text" x="1123" y="291" text-anchor="middle">download fail: retry/DLQ</text>
+      </svg>
+    </section>
+
+    <section>
+      <svg class="diagram" viewBox="0 0 1320 470" role="img" aria-label="Queue diagram">
+        <text class="title" x="34" y="48">4. Queue</text>
+
+        <rect class="node orange" x="76" y="126" width="210" height="128"/>
+        <rect class="topbar orange" x="76" y="126" width="210" height="7" rx="4"/>
+        <use href="#rabbitmq" x="104" y="158" width="56" height="56"/>
+        <text class="label" x="188" y="164">RabbitMQ</text>
+        <text class="sub" x="188" y="186">AMQP :5672</text>
+        <text class="tiny" x="188" y="207">UI :15672</text>
+        <text class="tiny" x="188" y="225">metrics :15692</text>
+
+        <path class="arrow good" d="M286 190H426"/>
+        <text class="tiny" x="326" y="174">persistent</text>
+
+        <rect class="node orange" x="430" y="126" width="210" height="128"/>
+        <rect class="topbar orange" x="430" y="126" width="210" height="7" rx="4"/>
+        <text class="label" x="535" y="166" text-anchor="middle">files</text>
+        <text class="sub" x="535" y="188" text-anchor="middle">file_key</text>
+        <text class="tiny" x="535" y="210" text-anchor="middle">prefetch 5</text>
+
+        <path class="arrow good" d="M640 190H780"/>
+        <text class="tiny" x="680" y="174">deliver</text>
+
+        <rect class="node purple" x="784" y="126" width="210" height="128"/>
+        <rect class="topbar purple" x="784" y="126" width="210" height="7" rx="4"/>
+        <use href="#spark" x="812" y="158" width="56" height="56"/>
+        <text class="label" x="896" y="166">Worker</text>
+        <text class="sub" x="896" y="188">process()</text>
+        <text class="tiny" x="896" y="210">ack/nack</text>
+
+        <path class="arrow good" d="M889 254V336H535V258"/>
+        <rect class="badge" x="468" y="322" width="134" height="28"/>
+        <text class="badge-text" x="535" y="341" text-anchor="middle">success: ack</text>
+
+        <path class="arrow retry" d="M784 198H704V292H535V258"/>
+        <rect class="badge" x="596" y="278" width="194" height="28"/>
+        <text class="badge-text" x="693" y="297" text-anchor="middle">fail &lt; max: retry</text>
+
+        <path class="arrow bad" d="M994 190H1132"/>
+        <rect class="node red" x="1136" y="126" width="128" height="128"/>
+        <rect class="topbar red" x="1136" y="126" width="128" height="7" rx="4"/>
+        <text class="label" x="1200" y="174" text-anchor="middle">files.dlq</text>
+        <text class="sub" x="1200" y="196" text-anchor="middle">fail &gt;= max</text>
+        <text class="tiny" x="1200" y="218" text-anchor="middle">x-error</text>
+
+        <path class="arrow retry" d="M889 126V76H535V122"/>
+        <rect class="badge" x="604" y="62" width="216" height="28"/>
+        <text class="badge-text" x="712" y="81" text-anchor="middle">crash before ack: redeliver</text>
+
+        <path class="arrow retry" d="M994 226H1080V390H535V258"/>
+        <rect class="badge" x="684" y="376" width="292" height="28"/>
+        <text class="badge-text" x="830" y="395" text-anchor="middle">retry/DLQ publish fail: requeue original</text>
+      </svg>
+    </section>
+
+    <section>
+      <svg class="diagram" viewBox="0 0 1320 640" role="img" aria-label="Transformation diagram">
+        <text class="title" x="34" y="48">5. Transformation</text>
+
+        <rect class="node purple" x="54" y="112" width="148" height="86"/>
+        <rect class="topbar purple" x="54" y="112" width="148" height="7" rx="4"/>
+        <use href="#spark" x="74" y="132" width="40" height="40"/>
+        <text class="label" x="146" y="148" text-anchor="middle">Spark</text>
+        <text class="sub" x="146" y="169" text-anchor="middle">Delta ext</text>
+
+        <path class="arrow good" d="M202 155H288"/>
+        <rect class="node orange" x="292" y="112" width="148" height="86"/>
+        <rect class="topbar orange" x="292" y="112" width="148" height="7" rx="4"/>
+        <use href="#rabbitmq" x="312" y="132" width="40" height="40"/>
+        <text class="label" x="384" y="148" text-anchor="middle">consume</text>
+        <text class="sub" x="384" y="169" text-anchor="middle">JSON msg</text>
+
+        <path class="arrow good" d="M440 155H526"/>
+        <rect class="node purple" x="530" y="112" width="148" height="86"/>
+        <rect class="topbar purple" x="530" y="112" width="148" height="7" rx="4"/>
+        <text class="label" x="604" y="148" text-anchor="middle">process()</text>
+        <text class="sub" x="604" y="169" text-anchor="middle">warehouse path</text>
+
+        <path class="arrow good" d="M604 198V258"/>
+
+        <polygon points="604,258 700,326 604,394 508,326" fill="#fff" stroke="#7c3aed" stroke-width="1.8"/>
+        <text class="decision-text" x="604" y="316" text-anchor="middle">file_key</text>
+        <text class="decision-text" x="604" y="338" text-anchor="middle">seen?</text>
+
+        <path class="arrow warn" d="M508 326H360V470H604"/>
+        <rect class="badge" x="318" y="312" width="126" height="28"/>
+        <text class="badge-text" x="381" y="331" text-anchor="middle">yes</text>
+        <rect class="node green" x="514" y="446" width="180" height="82"/>
+        <rect class="topbar green" x="514" y="446" width="180" height="7" rx="4"/>
+        <text class="label" x="604" y="480" text-anchor="middle">delete S3</text>
+        <text class="sub" x="604" y="501" text-anchor="middle">return + ack</text>
+
+        <path class="arrow good" d="M700 326H818"/>
+        <rect class="badge" x="724" y="312" width="82" height="28"/>
+        <text class="badge-text" x="765" y="331" text-anchor="middle">no</text>
+        <rect class="node green" x="822" y="282" width="164" height="88"/>
+        <rect class="topbar green" x="822" y="282" width="164" height="7" rx="4"/>
+        <use href="#s3" x="842" y="304" width="40" height="40"/>
+        <text class="label" x="926" y="318" text-anchor="middle">download</text>
+        <text class="sub" x="926" y="340" text-anchor="middle">source_bucket?</text>
+
+        <path class="arrow good" d="M986 326H1098"/>
+        <polygon points="1160,258 1256,326 1160,394 1064,326" fill="#fff" stroke="#7c3aed" stroke-width="1.8"/>
+        <text class="decision-text" x="1160" y="306" text-anchor="middle">readable</text>
+        <text class="decision-text" x="1160" y="328" text-anchor="middle">schema</text>
+        <text class="decision-text" x="1160" y="350" text-anchor="middle">rows?</text>
+
+        <path class="arrow warn" d="M1160 394V470H694"/>
+        <rect class="badge" x="1098" y="410" width="126" height="28"/>
+        <text class="badge-text" x="1161" y="429" text-anchor="middle">no: skip</text>
+
+        <path class="arrow good" d="M1160 258V166H760V252"/>
+        <rect class="node purple" x="686" y="232" width="148" height="86"/>
+        <rect class="topbar purple" x="686" y="232" width="148" height="7" rx="4"/>
+        <text class="label" x="760" y="266" text-anchor="middle">select</text>
+        <text class="sub" x="760" y="287" text-anchor="middle">GPS columns</text>
+
+        <path class="arrow good" d="M760 318V392"/>
+        <rect class="node teal" x="670" y="392" width="180" height="86"/>
+        <rect class="topbar teal" x="670" y="392" width="180" height="7" rx="4"/>
+        <use href="#delta" x="695" y="416" width="40" height="40"/>
+        <text class="label" x="790" y="428" text-anchor="middle">append</text>
+        <text class="sub" x="790" y="449" text-anchor="middle">measurements</text>
+
+        <path class="arrow good" d="M850 435H956"/>
+        <rect class="node teal" x="960" y="392" width="180" height="86"/>
+        <rect class="topbar teal" x="960" y="392" width="180" height="7" rx="4"/>
+        <text class="label" x="1050" y="428" text-anchor="middle">mark</text>
+        <text class="sub" x="1050" y="449" text-anchor="middle">_processed_files</text>
+
+        <path class="arrow good" d="M960 478V568H604V532"/>
+        <rect class="badge" x="760" y="554" width="140" height="28"/>
+        <text class="badge-text" x="830" y="573" text-anchor="middle">delete + ack</text>
+
+        <path class="arrow retry" d="M986 364H1030V590H384V202"/>
+        <rect class="badge" x="510" y="576" width="212" height="28"/>
+        <text class="badge-text" x="616" y="595" text-anchor="middle">exception: retry or DLQ</text>
+
+        <path class="arrow warn" d="M790 478V618H1050V482"/>
+        <rect class="badge" x="812" y="604" width="216" height="28"/>
+        <text class="badge-text" x="920" y="623" text-anchor="middle">crash gap: duplicate risk</text>
+      </svg>
+    </section>
+
+    <section>
+      <svg class="diagram" viewBox="0 0 1320 450" role="img" aria-label="Data warehouse diagram">
+        <text class="title" x="34" y="48">6. Warehouse</text>
+
+        <rect class="node teal" x="84" y="122" width="190" height="120"/>
+        <rect class="topbar teal" x="84" y="122" width="190" height="7" rx="4"/>
+        <use href="#delta" x="112" y="152" width="52" height="52"/>
+        <text class="label" x="190" y="160">Delta</text>
+        <text class="sub" x="190" y="182">/data/warehouse</text>
+        <text class="tiny" x="190" y="203">delta-warehouse</text>
+
+        <path class="arrow good" d="M274 182H394"/>
+        <rect class="node teal" x="398" y="122" width="190" height="120"/>
+        <rect class="topbar teal" x="398" y="122" width="190" height="7" rx="4"/>
+        <text class="label" x="493" y="158" text-anchor="middle">measurements</text>
+        <text class="sub" x="493" y="180" text-anchor="middle">event_ts</text>
+        <text class="tiny" x="493" y="202" text-anchor="middle">source/date/gps</text>
+
+        <path class="arrow good" d="M588 182H708"/>
+        <rect class="node teal" x="712" y="122" width="190" height="120"/>
+        <rect class="topbar teal" x="712" y="122" width="190" height="7" rx="4"/>
+        <text class="label" x="807" y="158" text-anchor="middle">_processed_files</text>
+        <text class="sub" x="807" y="180" text-anchor="middle">file_key</text>
+        <text class="tiny" x="807" y="202" text-anchor="middle">duplicate guard</text>
+
+        <path class="arrow good" d="M493 242V332H324"/>
+        <rect class="node purple" x="154" y="306" width="170" height="82"/>
+        <rect class="topbar purple" x="154" y="306" width="170" height="7" rx="4"/>
+        <use href="#spark" x="178" y="326" width="38" height="38"/>
+        <text class="label" x="262" y="340" text-anchor="middle">query script</text>
+        <text class="sub" x="262" y="361" text-anchor="middle">Spark read</text>
+
+        <path class="arrow good" d="M588 332H740"/>
+        <rect class="node purple" x="744" y="306" width="190" height="82"/>
+        <rect class="topbar purple" x="744" y="306" width="190" height="7" rx="4"/>
+        <use href="#spark" x="768" y="326" width="38" height="38"/>
+        <text class="label" x="858" y="340" text-anchor="middle">Thrift Server</text>
+        <text class="sub" x="858" y="361" text-anchor="middle">JDBC :10000</text>
+
+        <path class="arrow good" d="M934 347H1030"/>
+        <rect class="node blue" x="1034" y="306" width="170" height="82"/>
+        <rect class="topbar blue" x="1034" y="306" width="170" height="7" rx="4"/>
+        <use href="#metabase" x="1058" y="326" width="38" height="38"/>
+        <text class="label" x="1140" y="340" text-anchor="middle">Metabase</text>
+        <text class="sub" x="1140" y="361" text-anchor="middle">:3001</text>
+
+        <path class="arrow good" d="M902 182H1014"/>
+        <rect class="node gray" x="1018" y="122" width="170" height="120"/>
+        <rect class="topbar gray" x="1018" y="122" width="170" height="7" rx="4"/>
+        <use href="#prometheus" x="1042" y="152" width="46" height="46"/>
+        <text class="label" x="1124" y="162" text-anchor="middle">metrics</text>
+        <text class="sub" x="1124" y="184" text-anchor="middle">optional profile</text>
+        <text class="tiny" x="1124" y="205" text-anchor="middle">Prometheus/Grafana</text>
+
+        <path class="arrow warn" d="M807 242V424H493V246"/>
+        <rect class="badge" x="558" y="410" width="184" height="28"/>
+        <text class="badge-text" x="650" y="429" text-anchor="middle">append then mark</text>
+      </svg>
+    </section>
+  </main>
+</body>
+</html>

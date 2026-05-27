@@ -42,6 +42,19 @@ logging.basicConfig(
 log = logging.getLogger("worker")
 
 
+def _publish_confirmed(ch, routing_key: str, body: bytes, properties: pika.BasicProperties) -> None:
+    """Publish only if RabbitMQ confirms durable acceptance."""
+    confirmed = ch.basic_publish(
+        exchange="",
+        routing_key=routing_key,
+        body=body,
+        properties=properties,
+        mandatory=True,
+    )
+    if confirmed is False:
+        raise RuntimeError(f"RabbitMQ did not confirm publish to {routing_key}")
+
+
 def build_spark() -> SparkSession:
     builder = (
         SparkSession.builder
@@ -109,6 +122,31 @@ def _mark_processed(spark: SparkSession, file_key: str, warehouse_path: str) -> 
     spark.createDataFrame([(file_key,)], ["file_key"]).write.format("delta").mode("append").save(registry_path)
 
 
+def _ensure_measurements_table(spark: SparkSession, delta_path: str) -> DeltaTable:
+    """Create or migrate the measurements table used for idempotent file writes."""
+    (
+        DeltaTable.createIfNotExists(spark)
+        .location(delta_path)
+        .addColumn("file_key",     StringType())
+        .addColumn("measurement",  StringType())
+        .addColumn("source_id",    StringType())
+        .addColumn("event_ts",     TimestampType())
+        .addColumn("date",         DateType())
+        .addColumn("latitude",     DoubleType())
+        .addColumn("longitude",    DoubleType())
+        .addColumn("speed_knots",  DoubleType())
+        .addColumn("recorded_at",  TimestampType())
+        .clusterBy("event_ts", "source_id")
+        .execute()
+    )
+
+    table = DeltaTable.forPath(spark, delta_path)
+    if "file_key" not in table.toDF().columns:
+        spark.sql(f"ALTER TABLE delta.`{delta_path}` ADD COLUMNS (file_key STRING)")
+        table = DeltaTable.forPath(spark, delta_path)
+    return table
+
+
 def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
     bucket = msg["source_bucket"] if "source_bucket" in msg else os.environ.get("S3_BUCKET", "telemetry")
     file_key = msg["file_key"]
@@ -156,6 +194,7 @@ def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
         return
 
     df = valid_df.select(
+        lit(file_key).alias("file_key"),
         col("measurement"),
         col("source_id"),
         to_timestamp(col("timestamp")).alias("event_ts"),
@@ -171,33 +210,22 @@ def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
     df_out = df.coalesce(1) if n_partitions == 1 else df
 
     delta_path = f"{warehouse_path}/measurements"
+    table = _ensure_measurements_table(spark, delta_path)
 
-    # Create table with Liquid Clustering on first write; no-op if it already exists.
-    # clusterBy() lives on DeltaTableBuilder, not DataFrameWriter.
     (
-        DeltaTable.createIfNotExists(spark)
-        .location(delta_path)
-        .addColumn("measurement",  StringType())
-        .addColumn("source_id",    StringType())
-        .addColumn("event_ts",     TimestampType())
-        .addColumn("date",         DateType())
-        .addColumn("latitude",     DoubleType())
-        .addColumn("longitude",    DoubleType())
-        .addColumn("speed_knots",  DoubleType())
-        .addColumn("recorded_at",  TimestampType())
-        .clusterBy("event_ts", "source_id")
+        table.alias("target")
+        .merge(
+            df_out.alias("source"),
+            """
+            target.file_key = source.file_key AND
+            target.source_id = source.source_id AND
+            target.event_ts = source.event_ts
+            """,
+        )
+        .whenNotMatchedInsertAll()
         .execute()
     )
 
-    (
-        df_out.write
-        .format("delta")
-        .mode("append")
-        .save(delta_path)
-    )
-
-    # NOTE: not atomic — a crash here causes duplicate rows on redelivery.
-    # Acceptable; deduplicate downstream with dropDuplicates(["source_id", "event_ts"]).
     _mark_processed(spark, file_key, warehouse_path)
     s3.delete_object(Bucket=bucket, Key=file_key)
     log.info("Processed: %s  (%d rows, %d partition(s))", file_key, df.count(), n_partitions)
@@ -217,6 +245,7 @@ def main() -> None:
     ch = conn.channel()
     ch.queue_declare(queue=queue, durable=True)
     ch.queue_declare(queue=dlq, durable=True)
+    ch.confirm_delivery()
     ch.basic_qos(prefetch_count=5)
 
     def on_message(ch, method, properties, body):
@@ -231,11 +260,11 @@ def main() -> None:
             if retry_count >= retry_max:
                 log.error("Max retries reached — sending to DLQ: %s", body[:200])
                 try:
-                    ch.basic_publish(
-                        exchange="",
-                        routing_key=dlq,
-                        body=body,
-                        properties=pika.BasicProperties(
+                    _publish_confirmed(
+                        ch,
+                        dlq,
+                        body,
+                        pika.BasicProperties(
                             delivery_mode=2,
                             headers={"x-retry-count": retry_count, "x-error": str(exc)},
                         ),
@@ -247,11 +276,11 @@ def main() -> None:
                 ch.basic_ack(delivery_tag=method.delivery_tag)
             else:
                 try:
-                    ch.basic_publish(
-                        exchange="",
-                        routing_key=queue,
-                        body=body,
-                        properties=pika.BasicProperties(
+                    _publish_confirmed(
+                        ch,
+                        queue,
+                        body,
+                        pika.BasicProperties(
                             delivery_mode=2,
                             headers={"x-retry-count": retry_count + 1},
                         ),

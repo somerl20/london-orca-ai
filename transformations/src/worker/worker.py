@@ -27,8 +27,12 @@ import boto3
 import pika
 from botocore.client import Config
 from delta import configure_spark_with_delta_pip
+from delta.tables import DeltaTable
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, current_timestamp, to_date, to_timestamp
+from pyspark.sql.types import (
+    DoubleType, DateType, StringType, StructField, StructType, TimestampType
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -112,11 +116,28 @@ def process(spark: SparkSession, s3, msg: dict, warehouse_path: str) -> None:
     df_out = df.coalesce(1) if n_partitions == 1 else df
 
     delta_path = f"{warehouse_path}/measurements"
+
+    # Create table with Liquid Clustering on first write; no-op if it already exists.
+    # clusterBy() lives on DeltaTableBuilder, not DataFrameWriter.
+    (
+        DeltaTable.createIfNotExists(spark)
+        .location(delta_path)
+        .addColumn("measurement",  StringType())
+        .addColumn("source_id",    StringType())
+        .addColumn("event_ts",     TimestampType())
+        .addColumn("date",         DateType())
+        .addColumn("latitude",     DoubleType())
+        .addColumn("longitude",    DoubleType())
+        .addColumn("speed_knots",  DoubleType())
+        .addColumn("recorded_at",  TimestampType())
+        .clusterBy("event_ts", "source_id")
+        .execute()
+    )
+
     (
         df_out.write
         .format("delta")
         .mode("append")
-        .clusterBy("event_ts", "source_id")
         .save(delta_path)
     )
 

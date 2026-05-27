@@ -1,0 +1,164 @@
+# Usage:
+#   Core pipeline:    docker-compose up
+#   With monitoring:  docker-compose --profile monitoring up
+#   With analytics:   docker-compose --profile analytics up
+#   Everything:       docker-compose --profile monitoring --profile analytics up
+
+services:
+
+  # ─── Object Store (S3-compatible) ────────────────────────────────────────────
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "9333:9333"   # master HTTP
+      - "8080:8080"   # volume HTTP
+      - "8888:8888"   # filer HTTP
+      - "8333:8333"   # S3 API
+    volumes:
+      - seaweedfs-data:/data
+      - ./datalake/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # ─── Message Broker ───────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # management UI → http://localhost:15672  (guest / guest)
+      - "15692:15692"  # Prometheus metrics
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─── Generator (ships → SeaweedFS S3 + RabbitMQ) ─────────────────────────────
+  generator:
+    build: ./generator
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    environment:
+      SOURCES: "10"
+      RATE: "2"
+      SIZE: "small"
+      RATE_JITTER: "0.3"
+      SIZE_RANDOM: "false"
+      S3_ENDPOINT: "http://seaweedfs:8333"
+      S3_BUCKET: "telemetry"
+      S3_ACCESS_KEY: "any"
+      S3_SECRET_KEY: "any"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      RABBITMQ_QUEUE: "files"
+    restart: on-failure
+
+  # ─── Transform Worker (RabbitMQ → SeaweedFS → PySpark → Delta Lake) ──────────
+  worker:
+    build: ./transformations
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    environment:
+      S3_ENDPOINT: "http://seaweedfs:8333"
+      S3_BUCKET: "telemetry"
+      S3_ACCESS_KEY: "any"
+      S3_SECRET_KEY: "any"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      RABBITMQ_QUEUE: "files"
+      RABBITMQ_DLQ: "files.dlq"
+      RETRY_MAX: "3"
+      WAREHOUSE_PATH: "/data/warehouse"
+    volumes:
+      - delta-warehouse:/data/warehouse
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    restart: on-failure
+
+  # ─── Monitoring: Prometheus ───────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    profiles:
+      - monitoring
+    ports:
+      - "9090:9090"   # UI → http://localhost:9090
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+
+  # ─── Monitoring: Grafana ──────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    profiles:
+      - monitoring
+    ports:
+      - "3000:3000"   # UI → http://localhost:3000  (admin / admin)
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+
+  # ─── Analytics: Spark Thrift Server ──────────────────────────────────────────
+  spark-thrift:
+    build: ./warehouse/spark-thrift
+    profiles:
+      - analytics
+    ports:
+      - "10000:10000"  # JDBC → Metabase: host=localhost port=10000
+    volumes:
+      - delta-warehouse:/data/warehouse
+    environment:
+      WAREHOUSE_PATH: "/data/warehouse"
+    restart: on-failure
+
+  # ─── Analytics: Metabase ─────────────────────────────────────────────────────
+  metabase:
+    image: metabase/metabase:latest
+    profiles:
+      - analytics
+    ports:
+      - "3001:3000"   # UI → http://localhost:3001
+    depends_on:
+      - spark-thrift
+    volumes:
+      - metabase-data:/metabase-data
+    environment:
+      MB_DB_TYPE: h2
+      MB_DB_FILE: /metabase-data/metabase.db
+    restart: on-failure
+
+volumes:
+  seaweedfs-data:
+  rabbitmq-data:
+  delta-warehouse:
+  prometheus-data:
+  grafana-data:
+  metabase-data:
+
+networks:
+  default:
+    name: pipeline-network

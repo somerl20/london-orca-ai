@@ -56,3 +56,14 @@ Target store for transformed columnar data — queryable, ACID-compliant, partit
 Chosen for its seamless Spark integration — ACID transactions, schema evolution, and partitioning with no additional infrastructure or server required.
 
 **Acknowledged trade-off:** Delta Lake and Spark are tightly coupled. Replacing one effectively requires replacing the other. This is an accepted limitation for the current scope. For a production system requiring engine portability, Apache Iceberg would be the better long-term choice.
+
+---
+
+## Production Note: Write Path and Read Path Must Be Separated
+
+In the current setup, the transform worker writes to Delta Lake and warehouse consumers (Spark Thrift Server) read from it — both sharing the same mounted volume. The write path is resource-capped but not fully isolated from the read path at the infrastructure level.
+
+**For production scale:**
+- Run Spark in **cluster mode** — writer executors and query executors run on separate nodes with independent resource pools
+- Deploy a **dedicated catalog service** (Hive Metastore or a REST catalog) so multiple engines (Spark, Trino, Flink) can discover tables without relying on a shared filesystem path
+- Consider **Apache Iceberg** over Delta Lake if engine portability is required — Iceberg's catalog abstraction makes the write/read separation cleaner across heterogeneous compute

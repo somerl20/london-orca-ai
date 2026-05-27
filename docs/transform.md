@@ -60,3 +60,15 @@ Consumes file references from the queue, reads raw JSON from the object store, t
 Chosen for its natural fit with batch file processing, mature PySpark API, and strong production adoption at scale. Runs in `local[*]` mode for the assignment; switches to cluster mode for production with no code changes.
 
 Flink ruled out — strengths (true streaming, millisecond latency, exactly-once) are not required for periodic file drops and come at the cost of added complexity. Pandas ruled out — not production-grade.
+
+---
+
+## Known Limitation: Transformation and Warehouse Write Share the Same Container
+
+In the current setup, the transform worker runs Spark in `local[2]` mode and writes directly to Delta Lake within the same container. This means transformation (CPU-bound) and warehouse writes (I/O-bound) compete for the same resources.
+
+**Why this is unavoidable here:** Delta Lake has no standalone write API — Spark is the writer. There is no way to split "transform" and "write to Delta" into separate containers without introducing an intermediate storage layer.
+
+**Current mitigation:** The worker container is capped at 2 CPUs / 2GB RAM via Docker resource limits, leaving headroom for warehouse read consumers (Spark Thrift Server).
+
+**Production recommendation:** Run Spark in cluster mode (separate driver + executor nodes). Each executor gets isolated CPU and memory. Writers and readers run on separate nodes, and the cluster scales independently of the warehouse query layer. The code requires no changes — only the `master("local[2]")` config switches to a cluster URL.

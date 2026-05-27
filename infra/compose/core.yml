@@ -1,0 +1,102 @@
+# Core pipeline — object store, broker, generator, transform worker
+#
+# Run from project root:
+#   docker-compose -f infra/compose/core.yml up
+#   docker-compose -f infra/compose/core.yml -f infra/compose/monitoring.yml up
+#   docker-compose -f infra/compose/core.yml -f infra/compose/analytics.yml up
+#   docker-compose -f infra/compose/core.yml -f infra/compose/monitoring.yml -f infra/compose/analytics.yml up
+
+services:
+
+  # ─── Object Store (S3-compatible) ────────────────────────────────────────────
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "9333:9333"   # master HTTP
+      - "8080:8080"   # volume HTTP
+      - "8888:8888"   # filer HTTP
+      - "8333:8333"   # S3 API
+    volumes:
+      - seaweedfs-data:/data
+      - ../../datalake/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # ─── Message Broker ───────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # management UI → http://localhost:15672  (guest / guest)
+      - "15692:15692"  # Prometheus metrics
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─── Generator (ships → SeaweedFS S3 + RabbitMQ) ─────────────────────────────
+  generator:
+    build: ../../generator
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    environment:
+      SOURCES: "10"
+      RATE: "2"
+      SIZE: "small"
+      RATE_JITTER: "0.3"
+      SIZE_RANDOM: "false"
+      S3_ENDPOINT: "http://seaweedfs:8333"
+      S3_BUCKET: "telemetry"
+      S3_ACCESS_KEY: "any"
+      S3_SECRET_KEY: "any"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      RABBITMQ_QUEUE: "files"
+    restart: on-failure
+
+  # ─── Transform Worker (RabbitMQ → SeaweedFS → PySpark → Delta Lake) ──────────
+  worker:
+    build: ../../transformations
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    environment:
+      S3_ENDPOINT: "http://seaweedfs:8333"
+      S3_BUCKET: "telemetry"
+      S3_ACCESS_KEY: "any"
+      S3_SECRET_KEY: "any"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      RABBITMQ_QUEUE: "files"
+      RABBITMQ_DLQ: "files.dlq"
+      RETRY_MAX: "3"
+      WAREHOUSE_PATH: "/data/warehouse"
+    volumes:
+      - delta-warehouse:/data/warehouse
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    restart: on-failure
+
+volumes:
+  seaweedfs-data:
+  rabbitmq-data:
+  delta-warehouse:
+
+networks:
+  default:
+    name: pipeline-network

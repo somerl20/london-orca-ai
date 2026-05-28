@@ -40,6 +40,34 @@ Three stages with clear boundaries:
 
 
 
+## 4. Focus Areas
+
+**Reliable message delivery over raw throughput** — RabbitMQ with durable queues, explicit acks, retry counting, and DLQ. A message is never silently lost — it either lands in the warehouse or lands in `files.dlq` with a reason.
+
+**Idempotent writes** — The `_processed_files` guard means the pipeline survives crashes, redeliveries, and restarts without producing duplicate rows. This is the hardest correctness property to get right in an at-least-once system.
+
+**Error isolation at every stage** — Each failure mode has its own explicit path rather than a generic catch-all. The distinction between transient failures (retried) and worker process crashes (RabbitMQ handles redelivery) was consciously designed.
+
+**Test coverage as a safety net** — Unit, E2E, and resilience tests covering crash recovery, duplicates, schema errors, and bursty load — so the correctness claims are verified, not just asserted (see [testing.md](../testing.md)).
+
+What was deliberately left lighter: observability (Prometheus wired but no custom worker metrics), schema evolution (only GPS fields projected), and large-file chunking (see [gaps.md](gaps.md)).
+
+---
+
+## 5. Trade-offs
+
+**Delta Lake over Iceberg** — Delta needed zero extra infrastructure (no catalog server). The cost is tight Spark coupling. For this scope that's acceptable; for a multi-engine production system Iceberg would be the right call.
+
+**Spark `local[2]` per container instead of cluster mode** — Correct for the file sizes given. Cluster mode would require external infrastructure that adds no value here.
+
+**All exceptions treated as retryable** — The worker retries everything including permanent failures like malformed JSON. The right fix is to distinguish transient vs permanent errors and skip retries for the latter. Deferred because it requires a more careful exception taxonomy in the code.
+
+**Check-then-write idempotency instead of an atomic transaction** — The `_processed_files` check and the Delta write are two separate operations. A crash between them leaves an inconsistency. The correct fix is a single Delta transaction recording both. Deferred — meaningful complexity for an edge case that is rare in practice.
+
+**No Grafana dashboards, no custom worker metrics** — Infrastructure is fully wired (Prometheus, RabbitMQ exporter). Emitting custom worker metrics and building dashboards would have consumed the remaining time budget without improving pipeline correctness.
+
+---
+
 ## 6. Production at 500+ Sources
 
 | Area | Change |

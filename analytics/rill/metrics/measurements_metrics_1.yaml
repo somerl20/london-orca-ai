@@ -1,0 +1,52 @@
+# Metrics view YAML
+# Reference documentation: https://docs.rilldata.com/reference/project-files/metrics-views
+
+version: 1
+type: metrics_view 
+
+display_name: Measurements
+connector: duckdb
+model: measurements
+timeseries: event_ts
+
+dimensions:
+  - name: file_key
+    display_name: File Key
+    column: file_key
+  - name: measurement
+    display_name: Measurement
+    column: measurement
+  - name: source_id
+    display_name: Source Id
+    column: source_id
+  - name: event_ts
+    display_name: Event Ts
+    column: event_ts
+  - name: date
+    display_name: Date
+    column: date
+  - name: recorded_at
+    display_name: Recorded At
+    column: recorded_at
+
+measures:
+  - name: total_records
+    display_name: Total records
+    expression: COUNT(*)
+    description: ""
+    format_preset: humanize
+  - name: latitude_sum
+    display_name: Sum of Latitude
+    expression: SUM(latitude)
+    description: ""
+    format_preset: humanize
+  - name: longitude_sum
+    display_name: Sum of Longitude
+    expression: SUM(longitude)
+    description: ""
+    format_preset: humanize
+  - name: speed_knots_sum
+    display_name: Sum of Speed Knots
+    expression: SUM(speed_knots)
+    description: ""
+    format_preset: humanize

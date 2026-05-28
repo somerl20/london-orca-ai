@@ -1,8 +1,6 @@
 # Usage:
-#   Core pipeline:    docker-compose up
-#   With monitoring:  docker-compose --profile monitoring up
-#   With analytics:   docker-compose --profile analytics up
-#   Everything:       docker-compose --profile monitoring --profile analytics up
+#   Core pipeline + dashboards:  docker-compose up
+#   With monitoring:             docker-compose --profile monitoring up
 
 services:
 
@@ -112,39 +110,16 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
 
-  # ─── Monitoring: Grafana ──────────────────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:latest
-    profiles:
-      - monitoring
-    ports:
-      - "3030:3000"   # UI → http://localhost:3030  (admin / admin)
-    depends_on:
-      - prometheus
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - delta-warehouse:/data/warehouse
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: ""
 
-  # ─── Analytics: Metabase + DuckDB ────────────────────────────────────────────
-  metabase:
-    build: ./analytics/metabase
-    profiles:
-      - analytics
+  # ─── Analytics: Rill + DuckDB → Delta Lake ───────────────────────────────────
+  rill:
+    image: rilldata/rill:latest
     ports:
-      - "3030:3000"   # UI → http://localhost:3030  (via DuckDB → Delta Lake)
+      - "3030:9009"   # UI → http://localhost:3030
     volumes:
-      - metabase-data:/metabase-data
+      - ./analytics/rill:/project
       - delta-warehouse:/data/warehouse
-    environment:
-      MB_DB_TYPE: h2
-      MB_DB_FILE: /metabase-data/metabase.db
+    command: ["start", "--no-open", "--port", "9009", "/project"]
     restart: on-failure
 
 volumes:
@@ -152,8 +127,6 @@ volumes:
   rabbitmq-data:
   delta-warehouse:
   prometheus-data:
-  grafana-data:
-  metabase-data:
 
 networks:
   default:

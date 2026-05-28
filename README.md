@@ -27,6 +27,10 @@ A production-grade data pipeline that ingests GPS sensor telemetry from a fleet 
 
 ⚠️ [Known gaps — what was deferred and why](docs/design/gaps.md)
 
+📊 [Analytics dashboards — how to view the Fleet Operations dashboard](docs/analytics.md)
+
+[![Fleet Operations Dashboard](images/dashboard.png)](docs/analytics.md)
+
 ---
 
 ## Prerequisites
@@ -97,9 +101,7 @@ That's it. The generator starts producing ship files immediately. The worker con
 | SeaweedFS S3 API | http://localhost:8333 | `any` / `any` |
 | SeaweedFS Filer | http://localhost:8888 | — |
 | Prometheus | http://localhost:9090 | — |
-| Grafana | http://localhost:3000 | `admin` / `admin` |
-| Spark Thrift Server (JDBC) | `localhost:10000` | — |
-| Metabase | http://localhost:3010 | Set on first launch |
+| Rill (Fleet Dashboard) | http://localhost:3030 | — |
 
 ---
 

@@ -1,0 +1,297 @@
+type: canvas
+display_name: "Fleet Operations Dashboard"
+
+# Canvas dashboard for metrics view: measurements_1_metrics_1
+# Uses metrics_sql for robust, efficient component queries.
+
+defaults:
+  time_range: P30D
+  comparison_mode: time
+
+max_width: 1400
+
+rows:
+  - height: 72px
+    items:
+      - width: 12
+        markdown:
+          title: ""
+          description: ""
+          content: >
+            # Fleet Operations Dashboard
+
+
+            Key volume, coverage, and speed metrics with drilldowns by source
+            and measurement.
+          alignment:
+            vertical: middle
+            horizontal: left
+
+  - height: 220px
+    items:
+      - width: 12
+        kpi_grid:
+          metrics_view: measurements_1_metrics_1
+          measures:
+            - total_measurement_rows_measure
+            - distinct_files_measure
+            - distinct_measurements_measure
+            - distinct_sources_measure
+            - avg_speed_knots_measure
+            - max_speed_knots_measure
+          comparison:
+            - delta
+            - percent_change
+            - previous
+          sparkline: right
+
+  - height: 420px
+    items:
+      - width: 7
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                date_trunc('day', event_ts) AS day,
+                total_measurement_rows_measure,
+                avg_speed_knots_measure
+              FROM measurements_1_metrics_1
+              ORDER BY day
+              LIMIT 500
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "resolve": {"scale": {"y": "independent"}},
+              "layer": [
+                {
+                  "mark": {"type": "bar", "opacity": 0.35, "color": "#4C78A8"},
+                  "encoding": {
+                    "x": {"field": "day", "type": "temporal", "title": "Day"},
+                    "y": {"field": "total_measurement_rows_measure", "type": "quantitative", "title": "Total rows"}
+                  }
+                },
+                {
+                  "mark": {"type": "line", "strokeWidth": 2, "color": "#F58518"},
+                  "encoding": {
+                    "x": {"field": "day", "type": "temporal", "title": "Day"},
+                    "y": {"field": "avg_speed_knots_measure", "type": "quantitative", "title": "Avg speed (knots)", "axis": {"orient": "right"}}
+                  }
+                }
+              ],
+              "encoding": {
+                "tooltip": [
+                  {"field": "day", "type": "temporal", "title": "Day"},
+                  {"field": "total_measurement_rows_measure", "type": "quantitative", "title": "Total rows", "format": ","},
+                  {"field": "avg_speed_knots_measure", "type": "quantitative", "title": "Avg speed (knots)", "format": ",.2f"}
+                ]
+              }
+            }
+      - width: 5
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                date_trunc('day', event_ts) AS day,
+                min_speed_knots_measure,
+                avg_speed_knots_measure,
+                max_speed_knots_measure
+              FROM measurements_1_metrics_1
+              ORDER BY day
+              LIMIT 500
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "transform": [
+                {
+                  "fold": ["min_speed_knots_measure", "avg_speed_knots_measure", "max_speed_knots_measure"],
+                  "as": ["stat", "speed"]
+                }
+              ],
+              "mark": {"type": "line", "point": true},
+              "encoding": {
+                "x": {"field": "day", "type": "temporal", "title": "Day"},
+                "y": {"field": "speed", "type": "quantitative", "title": "Speed (knots)", "zero": false},
+                "color": {
+                  "field": "stat",
+                  "type": "nominal",
+                  "title": "Statistic",
+                  "scale": {
+                    "domain": ["min_speed_knots_measure", "avg_speed_knots_measure", "max_speed_knots_measure"],
+                    "range": ["#54A24B", "#F58518", "#E45756"]
+                  }
+                },
+                "tooltip": [
+                  {"field": "day", "type": "temporal", "title": "Day"},
+                  {"field": "stat", "type": "nominal", "title": "Statistic"},
+                  {"field": "speed", "type": "quantitative", "title": "Speed (knots)", "format": ",.2f"}
+                ]
+              }
+            }
+
+  - height: 420px
+    items:
+      - width: 6
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                source_id,
+                total_measurement_rows_measure,
+                avg_speed_knots_measure
+              FROM measurements_1_metrics_1
+              ORDER BY total_measurement_rows_measure DESC
+              LIMIT 20
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "mark": {"type": "bar"},
+              "encoding": {
+                "y": {"field": "source_id", "type": "nominal", "title": "Source", "sort": "-x"},
+                "x": {"field": "total_measurement_rows_measure", "type": "quantitative", "title": "Total rows"},
+                "color": {"value": "#4C78A8"},
+                "tooltip": [
+                  {"field": "source_id", "type": "nominal", "title": "Source"},
+                  {"field": "total_measurement_rows_measure", "type": "quantitative", "title": "Total rows", "format": ","},
+                  {"field": "avg_speed_knots_measure", "type": "quantitative", "title": "Avg speed (knots)", "format": ",.2f"}
+                ]
+              }
+            }
+      - width: 6
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                measurement,
+                total_measurement_rows_measure,
+                avg_speed_knots_measure
+              FROM measurements_1_metrics_1
+              ORDER BY total_measurement_rows_measure DESC
+              LIMIT 20
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "mark": {"type": "bar"},
+              "encoding": {
+                "y": {"field": "measurement", "type": "nominal", "title": "Measurement", "sort": "-x"},
+                "x": {"field": "total_measurement_rows_measure", "type": "quantitative", "title": "Total rows"},
+                "color": {"value": "#72B7B2"},
+                "tooltip": [
+                  {"field": "measurement", "type": "nominal", "title": "Measurement"},
+                  {"field": "total_measurement_rows_measure", "type": "quantitative", "title": "Total rows", "format": ","},
+                  {"field": "avg_speed_knots_measure", "type": "quantitative", "title": "Avg speed (knots)", "format": ",.2f"}
+                ]
+              }
+            }
+
+  - height: 420px
+    items:
+      - width: 7
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                measurement,
+                avg_speed_knots_measure,
+                min_speed_knots_measure,
+                max_speed_knots_measure
+              FROM measurements_1_metrics_1
+              ORDER BY avg_speed_knots_measure DESC
+              LIMIT 25
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "transform": [
+                {
+                  "fold": ["min_speed_knots_measure", "avg_speed_knots_measure", "max_speed_knots_measure"],
+                  "as": ["stat", "speed"]
+                }
+              ],
+              "mark": {"type": "bar"},
+              "encoding": {
+                "y": {"field": "measurement", "type": "nominal", "title": "Measurement", "sort": "-x"},
+                "x": {"field": "speed", "type": "quantitative", "title": "Speed (knots)", "zero": false},
+                "color": {
+                  "field": "stat",
+                  "type": "nominal",
+                  "title": "Statistic",
+                  "scale": {
+                    "domain": ["min_speed_knots_measure", "avg_speed_knots_measure", "max_speed_knots_measure"],
+                    "range": ["#54A24B", "#F58518", "#E45756"]
+                  }
+                },
+                "tooltip": [
+                  {"field": "measurement", "type": "nominal", "title": "Measurement"},
+                  {"field": "stat", "type": "nominal", "title": "Statistic"},
+                  {"field": "speed", "type": "quantitative", "title": "Speed (knots)", "format": ",.2f"}
+                ]
+              }
+            }
+      - width: 5
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                avg_speed_knots_measure
+              FROM measurements_1_metrics_1
+              LIMIT 5000
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "transform": [
+                {"filter": "isValid(datum.avg_speed_knots_measure)"},
+                {"bin": {"maxbins": 30}, "field": "avg_speed_knots_measure", "as": "speed_bin"}
+              ],
+              "mark": {"type": "bar"},
+              "encoding": {
+                "x": {"field": "speed_bin", "type": "quantitative", "title": "Avg speed (knots) — binned"},
+                "y": {"aggregate": "count", "type": "quantitative", "title": "Count"},
+                "color": {"value": "#F58518"},
+                "tooltip": [
+                  {"field": "speed_bin", "type": "quantitative", "title": "Avg speed (bin)"},
+                  {"aggregate": "count", "type": "quantitative", "title": "Count", "format": ","}
+                ]
+              }
+            }
+
+  - height: 420px
+    items:
+      - width: 12
+        table:
+          metrics_view: measurements_1_metrics_1
+          title: "Sample rows (grouped)"
+          description: "Grouped view by key dimensions with volume and speed measures. Use
+            dashboard filters/time range to refine."
+          columns:
+            - date
+            - recorded_at
+            - source_id
+            - measurement
+            - file_key
+            - total_measurement_rows_measure
+            - distinct_event_timestamps_measure
+            - avg_speed_knots_measure
+          limit: 200

@@ -1,0 +1,78 @@
+# Metrics view YAML
+# Reference documentation: https://docs.rilldata.com/reference/project-files/metrics-views
+# This file was generated using AI.
+
+version: 1
+type: metrics_view 
+
+display_name: Measurements
+connector: duckdb
+model: measurements
+timeseries: event_ts
+
+dimensions:
+  - name: file_key
+    display_name: File Key
+    column: file_key
+  - name: measurement
+    display_name: Measurement
+    column: measurement
+  - name: source_id
+    display_name: Source Id
+    column: source_id
+  - name: event_ts
+    display_name: Event Ts
+    column: event_ts
+  - name: date
+    display_name: Date
+    column: date
+  - name: recorded_at
+    display_name: Recorded At
+    column: recorded_at
+
+measures:
+  - name: total_measurement_rows_measure_measure
+    display_name: Total measurement rows
+    expression: COUNT(*)
+    description: Total number of rows in the measurements table.
+    format_preset: humanize
+  - name: distinct_files_measure_measure
+    display_name: Distinct files
+    expression: COUNT(DISTINCT file_key)
+    description: Number of unique file keys represented in the data.
+    format_preset: humanize
+  - name: distinct_measurement_types_measure_measure
+    display_name: Distinct measurement types
+    expression: COUNT(DISTINCT measurement)
+    description: Number of unique measurement type codes.
+    format_preset: humanize
+  - name: distinct_sources_measure_measure
+    display_name: Distinct sources
+    expression: COUNT(DISTINCT source_id)
+    description: Number of unique source identifiers.
+    format_preset: humanize
+  - name: avg_speed_knots_measure_measure
+    display_name: Average speed (knots)
+    expression: AVG(speed_knots)
+    description: Average recorded speed in knots.
+    format_preset: humanize
+  - name: min_speed_knots_measure_measure
+    display_name: Minimum speed (knots)
+    expression: MIN(speed_knots)
+    description: Minimum recorded speed in knots.
+    format_preset: humanize
+  - name: max_speed_knots_measure_measure
+    display_name: Maximum speed (knots)
+    expression: MAX(speed_knots)
+    description: Maximum recorded speed in knots.
+    format_preset: humanize
+  - name: avg_latitude_measure_measure
+    display_name: Average latitude
+    expression: AVG(latitude)
+    description: Average latitude across all measurements.
+    format_preset: humanize
+  - name: avg_longitude_measure_measure
+    display_name: Average longitude
+    expression: AVG(longitude)
+    description: Average longitude across all measurements.
+    format_preset: humanize

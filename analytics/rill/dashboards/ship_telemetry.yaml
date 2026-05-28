@@ -1,0 +1,28 @@
+type: metrics_view
+table: measurements
+timeseries: event_ts
+
+measures:
+  - name: total_events
+    label: Total Events
+    expression: COUNT(*)
+  - name: avg_speed
+    label: Avg Speed (knots)
+    expression: AVG(speed_knots)
+  - name: max_speed
+    label: Max Speed (knots)
+    expression: MAX(speed_knots)
+  - name: unique_ships
+    label: Unique Ships
+    expression: COUNT(DISTINCT source_id)
+
+dimensions:
+  - name: source_id
+    label: Ship ID
+    column: source_id
+  - name: measurement
+    label: Measurement Type
+    column: measurement
+  - name: date
+    label: Date
+    column: date

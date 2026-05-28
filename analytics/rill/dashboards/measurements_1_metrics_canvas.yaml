@@ -1,0 +1,243 @@
+version: 1
+type: canvas
+display_name: "Fleet Operations Dashboard"
+
+defaults:
+  time_range: P30D
+  comparison_mode: time
+
+max_width: 1400
+
+rows:
+  - items:
+      - width: 12
+        markdown:
+          content: |
+            # Fleet Operations Dashboard
+
+            Key KPIs, trends, and top contributors for `measurements_1_metrics`.
+  - items:
+      - width: 12
+        kpi_grid:
+          metrics_view: measurements_1_metrics
+          measures:
+            - total_measurement_rows_measure_measure
+            - distinct_files_measure_measure
+            - distinct_sources_measure_measure
+            - distinct_measurement_types_measure_measure
+            - avg_speed_knots_measure_measure
+            - min_speed_knots_measure_measure
+            - max_speed_knots_measure_measure
+          comparison:
+            - percent_change
+            - previous
+          sparkline: right
+    height: 220px
+  - items:
+      - width: 12
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                date_trunc('day', event_ts) AS day,
+                total_measurement_rows_measure_measure
+              FROM measurements_1_metrics
+              ORDER BY day
+              LIMIT 500
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "mark": {"type": "line", "point": true},
+              "encoding": {
+                "x": {"field": "day", "type": "temporal", "title": "Date"},
+                "y": {
+                  "field": "total_measurement_rows_measure_measure",
+                  "type": "quantitative",
+                  "title": "Total measurement rows"
+                },
+                "tooltip": [
+                  {"field": "day", "type": "temporal", "title": "Date"},
+                  {
+                    "field": "total_measurement_rows_measure_measure",
+                    "type": "quantitative",
+                    "title": "Total measurement rows"
+                  }
+                ]
+              }
+            }
+    height: 420px
+  - items:
+      - width: 6
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                source_id,
+                total_measurement_rows_measure_measure
+              FROM measurements_1_metrics
+              ORDER BY total_measurement_rows_measure_measure DESC
+              LIMIT 10
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "mark": "bar",
+              "encoding": {
+                "x": {
+                  "field": "total_measurement_rows_measure_measure",
+                  "type": "quantitative",
+                  "title": "Total measurement rows"
+                },
+                "y": {
+                  "field": "source_id",
+                  "type": "nominal",
+                  "title": "Source",
+                  "sort": "-x"
+                },
+                "tooltip": [
+                  {"field": "source_id", "type": "nominal", "title": "Source"},
+                  {
+                    "field": "total_measurement_rows_measure_measure",
+                    "type": "quantitative",
+                    "title": "Total measurement rows"
+                  }
+                ]
+              }
+            }
+      - width: 6
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                file_key,
+                total_measurement_rows_measure_measure
+              FROM measurements_1_metrics
+              ORDER BY total_measurement_rows_measure_measure DESC
+              LIMIT 10
+          vega_spec: |
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "mark": "bar",
+              "encoding": {
+                "x": {
+                  "field": "total_measurement_rows_measure_measure",
+                  "type": "quantitative",
+                  "title": "Total measurement rows"
+                },
+                "y": {
+                  "field": "file_key",
+                  "type": "nominal",
+                  "title": "File",
+                  "sort": "-x"
+                },
+                "tooltip": [
+                  {"field": "file_key", "type": "nominal", "title": "File"},
+                  {
+                    "field": "total_measurement_rows_measure_measure",
+                    "type": "quantitative",
+                    "title": "Total measurement rows"
+                  }
+                ]
+              }
+            }
+    height: 420px
+  - items:
+      - width: 7
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                measurement,
+                total_measurement_rows_measure_measure
+              FROM measurements_1_metrics
+              ORDER BY total_measurement_rows_measure_measure DESC
+              LIMIT 20
+          vega_spec: >
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "mark": "bar",
+              "encoding": {
+                "x": {
+                  "field": "measurement",
+                  "type": "nominal",
+                  "title": "Measurement",
+                  "sort": "-y",
+                  "axis": {"labelAngle": -30}
+                },
+                "y": {
+                  "field": "total_measurement_rows_measure_measure",
+                  "type": "quantitative",
+                  "title": "Total measurement rows"
+                },
+                "tooltip": [
+                  {"field": "measurement", "type": "nominal", "title": "Measurement"},
+                  {
+                    "field": "total_measurement_rows_measure_measure",
+                    "type": "quantitative",
+                    "title": "Total measurement rows"
+                  }
+                ]
+              }
+            }
+      - width: 5
+        custom_chart:
+          metrics_sql:
+            - |
+              SELECT
+                source_id,
+                total_measurement_rows_measure_measure,
+                distinct_files_measure_measure,
+                distinct_measurement_types_measure_measure
+              FROM measurements_1_metrics
+              ORDER BY total_measurement_rows_measure_measure DESC
+              LIMIT 10
+          vega_spec: >
+            {
+              "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+              "width": "container",
+              "height": "container",
+              "autosize": {"type": "fit"},
+              "data": {"name": "query1"},
+              "mark": "text",
+              "encoding": {
+                "text": {"value": ""}
+              },
+              "title": {
+                "text": "Top sources (table)",
+                "anchor": "start"
+              },
+              "transform": [
+                {
+                  "window": [{"op": "row_number", "as": "rank"}],
+                  "sort": [{"field": "total_measurement_rows_measure_measure", "order": "descending"}]
+                }
+              ],
+              "layer": [
+                {
+                  "mark": {"type": "text", "align": "left", "baseline": "top"},
+                  "encoding": {
+                    "y": {"field": "rank", "type": "ordinal", "axis": null},
+                    "text": {
+                      "field": "source_id",
+                      "type": "nominal"
+                    }
+                  }
+                }
+              ]
+            }
+    height: 420px

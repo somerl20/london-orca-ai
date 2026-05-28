@@ -6,6 +6,18 @@ A production-grade data pipeline that ingests GPS sensor telemetry from a fleet 
 
 [![E2E pipeline diagram](docs/diagram/e2e.svg)](docs/diagram/pipeline.html)
 
+| Requirement | Detail |
+|---|---|
+| **Latency** | Up to 10–15 minutes end-to-end |
+| **Scale** | Multiple ships dumping concurrently, parallel processing |
+| **Parallel processing** | Files from different ships processed concurrently |
+| **Volume** | Variable and unpredictable file sizes (small · medium · large), uneven distribution across time and sources |
+| **Data completeness** | All source records must reach the warehouse — no silent drops |
+| **Resource efficiency** | Pipeline must not waste compute or storage |
+| **Error handling** | Failures at any stage must not cause data loss |
+| **Schema validation** | Pipeline must tolerate schema changes gracefully |
+
+---
 
 ## Prerequisites
 
@@ -178,43 +190,15 @@ The script prints:
 - Row count per ship
 - Average and max pipeline lag (event timestamp → recorded timestamp)
 
-### Option 2 — Metabase (analytics profile)
 
-1. Start with `--profile analytics`
-2. Open http://localhost:3010
-3. Complete the Metabase setup wizard
-4. Add a **Spark SQL** data source:
-   - Host: `spark-thrift`
-   - Port: `10000`
-   - Database: `default`
-5. Query the `measurements` table
-
-### Option 3 — raw SQL queries
+### Option 2 — raw SQL queries
 
 Sample queries are in [`analytics/queries/`](analytics/queries/):
 
 - [`ships.sql`](analytics/queries/ships.sql) — per-ship row counts and latest event
 - [`pipeline_health.sql`](analytics/queries/pipeline_health.sql) — lag metrics
 
----
 
-## Monitoring
-
-Start with `--profile monitoring`, then open Grafana at http://localhost:3000 (`admin` / `admin`).
-
-**Prometheus targets:**
-- RabbitMQ metrics: http://localhost:15692/metrics
-- Pipeline worker metrics (when emitted): http://localhost:9090
-
-**Key metrics to watch:**
-
-| Metric | What it signals |
-|---|---|
-| `rabbitmq_queue_messages` (`files`) | Backlog — if growing, workers are falling behind |
-| `rabbitmq_queue_messages` (`files.dlq`) | Poisoned/unprocessable messages |
-| Worker restart count (`docker-compose ps`) | Repeated crashes indicate persistent failures |
-
----
 
 ## Running Tests
 

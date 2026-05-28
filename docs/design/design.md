@@ -19,7 +19,7 @@ Three stages with clear boundaries:
 | **Queue** | RabbitMQ | Native DLQ, durable queues, at-least-once delivery — see [broker.md](broker.md) |
 | **Object store** | SeaweedFS | S3-compatible, large file support, TTL lifecycle — see [storage.md](storage.md) |
 | **Transform** | PySpark | Batch-natural, scales local → cluster with no code changes — see [transform.md](transform.md) |
-| **Data store** | Delta Lake | ACID, schema evolution, Spark-native, no extra server — see [warehouse.md](warehouse.md) |
+| **Data store** | Delta Lake | ACID, schema evolution, Spark-native, no extra server — see [warehouse.md](warehouse.md), [clustering.md](clustering.md) |
 | **Analytics** | Spark Thrift Server | JDBC access to Delta Lake for SQL queries |
 | **Monitoring** | Prometheus | Scrapes RabbitMQ and SeaweedFS metrics out of the box |
 

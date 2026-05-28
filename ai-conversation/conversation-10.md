@@ -1,7 +1,5 @@
-# Conversation 3
-Source: a8a6303f-b37d-432f-b185-4c0974860871.jsonl
-Date: 2026-05-28 08:51
-
+# Conversation 10
+Date: May 27, 2026 20:34 UTC
 ---
 
 london: cd to /Users/omerlondon/Documents/projects/orca-ai/london-orca-ai
@@ -34,107 +32,11 @@ LLM: No problem — let me know when you're ready to pick a direction, or if you
 
 london: Assume we go with  Metabase what is our MVP dashboards and how do we implement it ?
 
-LLM: ## MVP Dashboards for Metabase
+LLM: ## MVP Dashboards for Metabase Based on your data model (`measurements` table + `_processed_files` registry), here's the MVP: --- ### Dashboard 1 — Pipeline Health | Card | Type | What it shows | |---|---|---| | Total records ingested | Single number | All-time `COUNT(*)` on measurements | | Records today | Single number | COUNT filtered to `date = today` | | Files processed | Single number | COUNT on `_processed_files` | | Records per hour (last 24h) | Time series line | Throughput rate, catches slowdowns | | Records per day (last 30d) | Bar chart | Historical
 
-Based on your data model (`measurements` table + `_processed_files` registry), here's the MVP:
+[... truncated ...]
 
----
-
-### Dashboard 1 — Pipeline Health
-
-| Card | Type | What it shows |
-|---|---|---|
-| Total records ingested | Single number | All-time `COUNT(*)` on measurements |
-| Records today | Single number | COUNT filtered to `date = today` |
-| Files processed | Single number | COUNT on `_processed_files` |
-| Records per hour (last 24h) | Time series line | Throughput rate, catches slowdowns |
-| Records per day (last 30d) | Bar chart | Historical volume trend |
-
-### Dashboard 2 — Ships
-
-| Card | Type | What it shows |
-|---|---|---|
-| Active ships today | Single number | `COUNT(DISTINCT source_id)` for today |
-| Active ships per day | Time series | How many unique ships reported each day |
-| Top ships by record count | Horizontal bar | Which ships are most active |
-| Latest position per ship | Table | `source_id`, last `event_ts`, last lat/lon, last speed |
-
----
-
-### How to implement it
-
-**Step 1 — Start the analytics profile**
-```bash
-cd /Users/omerlondon/Documents/projects/orca-ai/london-orca-ai
-docker-compose --profile analytics up -d
-```
-Wait ~60s for Spark Thrift to initialize, then open `http://localhost:3001`.
-
-**Step 2 — Metabase setup wizard**
-Go through the wizard (create admin account, skip the "add data" step for now).
-
-**Step 3 — Connect to Spark Thrift**
-Admin → Databases → Add database:
-```
-Database type:  Apache Spark
-Host:           spark-thrift      ← Docker service name (on same network)
-Port:           10000
-Database name:  default
-Username:       (leave empty)
-Password:       (leave empty)
-```
-Click "Save". Metabase will test the connection.
-
-**Step 4 — Write the SQL cards**
-
-Use **New → SQL query** for each. Key queries:
-
-```sql
--- Records per day (last 30 days)
-SELECT date, COUNT(*) AS records
-FROM delta.`/data/warehouse/measurements`
-GROUP BY date
-ORDER BY date DESC
-LIMIT 30
-```
-
-```sql
--- Active ships per day
-SELECT date, COUNT(DISTINCT source_id) AS ships
-FROM delta.`/data/warehouse/measurements`
-GROUP BY date
-ORDER BY date
-```
-
-```sql
--- Latest position per ship
-SELECT source_id,
-       MAX(event_ts)    AS last_seen,
-       AVG(latitude)    AS lat,
-       AVG(longitude)   AS lon,
-       AVG(speed_knots) AS avg_speed
-FROM delta.`/data/warehouse/measurements`
-WHERE date >= current_date - 1
-GROUP BY source_id
-ORDER BY last_seen DESC
-```
-
-```sql
--- Files processed
-SELECT COUNT(*) AS files_processed
-FROM delta.`/data/warehouse/_processed_files`
-```
-
-**Step 5 — Pin cards to a dashboard**
-Save each query as a question → "Add to dashboard" → create "Pipeline Health" and "Ships" dashboards.
-
----
-
-### One gotcha
-
-The Spark Thrift driver in Metabase may not support the `delta.` catalog prefix. If queries fail, use the table name registered in the Hive metastore instead — check what `SHOW TABLES` returns after connecting. You may need to run `CREATE TABLE IF NOT EXISTS measurements USING DELTA LOCATION '/data/warehouse/measurements'` once via the Thrift server to register it.
-
-Want me to add that table registration step to the `start.sh` script in `warehouse/spark-thrift/` so it happens automatically on startup?
+check what `SHOW TABLES` returns after connecting. You may need to run `CREATE TABLE IF NOT EXISTS measurements USING DELTA LOCATION '/data/warehouse/measurements'` once via the Thrift server to register it. Want me to add that table registration step to the `start.sh` script in `warehouse/spark-thrift/` so it happens automatically on startup?
 
 london: go ahed
 

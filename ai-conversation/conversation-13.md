@@ -1,7 +1,5 @@
-# Conversation 5
-Source: 86830cb0-568a-4e00-aa19-5960c6536613.jsonl
-Date: 2026-05-28 14:54
-
+# Conversation 13
+Date: May 28, 2026 08:18 UTC
 ---
 
 london: cd to /Users/omerlondon/Documents/projects/orca-ai/london-orca-ai
@@ -18,11 +16,11 @@ LLM: Let me read the design document and the key source files.
 
 LLM: Let me also check the worker and generator source code.
 
-LLM: Now I have a full picture. Here's a thorough requirement-by-requirement assessment: --- ## Requirements Coverage ### From the spec table | Requirement | Status | Evidence | How to measure | |---|---|---|---| | **Latency** ≤15 min | ✅ | Architecture is event-driven with immediate S3→queue→worker path | Run `scripts/query_measurements.py` — prints avg & max `recorded_at - event_ts` lag per ship | | **Scale** (multiple ships, parallel) | ✅ | `docker-compose up --scale worker=N`; RabbitMQ fans out to all workers | Watch RabbitMQ management UI (`:15672`) — queue depth drains proportionally faster with each added worker | | **Parallel processing** | ✅/⚠️ | Multiple Docker workers consume concurrently. Within a single container, files are sequential (Spark `local[2]`). Tests: `TestParallelShips` (10 ships, no loss). True thread-level parallelism not proven across shared Delta path | `pytest tests/test_resilience.py::TestParallelShips` | | **Volume** (variable sizes) | ✅/⚠️ | Worker adapts partition count from `size` field; coalesces small files. Generator supports small/medium/large. Tests parametrize all three tiers. **Gap**: full file loaded into memory — not true streaming chunking (documented in [gaps.md](docs/gaps.md) P0#3) | `pytest tests/test_resilience.py::TestVariableFileSizes` (all 3 tiers + concurrent small+large) | | **Data completeness** | ✅/⚠️ | At-least-once via durable RabbitMQ queues + explicit ack; Delta `MERGE` deduplication; `_processed_files` idempotency guard. **Gap**: check-then-write is not atomic — a crash between Delta write and `_mark_processed` can leave a gap (documented in [gaps.md](docs/gaps.md) P0#4) | `scripts/query_measurements.py` → total row count vs generator's `SOURCES × RATE × ROWS_PER_FILE` | | **Resource efficiency** | ✅ | Adaptive query execution on; `coalesce(1)` for small batches; partition count scaled from file size; container resource limits in `docker-compose.yml` | `docker stats` while pipeline runs; observe CPU/mem stay within limits | | **Error handling** | ✅/⚠️ | DLQ after `RETRY_MAX` failures; RabbitMQ redelivers on crash; graceful shutdown on SIGTERM; `_publish_confirmed` prevents silent publish loss. **Gap**: malformed/schema-invalid files are deleted from S3 instead of quarantined — source data is destroyed rather than preserved (documented in [gaps.md](docs/gaps.md) P0#2) | `pytest tests/test_resilience.py::TestRestartRecovery` (crash-before-ack → redelivery → exactly-once row count) | | **Schema validation** | ⚠️ | Required columns (`measurement`, `source_id`, `timestamp`, `values`) are checked before transform; `_ensure_measurements_table` handles a column migration (`file_key`). **Gap**: new measurement types or extra/renamed GPS fields are silently dropped — not a true schema evolution strategy (documented in [gaps.md](docs/gaps.md) P1#5) | Add a record with an extra field to the queue and verify it doesn't crash the worker | --- ### Deliverables |
+LLM: Now I have a full picture. Here's a thorough requirement-by-requirement assessment: --- ## Requirements Coverage ### From the spec table | Requirement | Status | Evidence | How to measure | |---|---|---|---| | **Latency** ≤15 min | ✅ | Architecture is event-driven with immediate S3→queue→worker path | Run `scripts/query_measurements.py` — prints avg & max `recorded_at - event_ts` lag per ship | | **Scale** (multiple ships, parallel) | ✅ | `docker-compose up --scale worker=N`; RabbitMQ fans out to all workers | Watch RabbitMQ management UI (`:15672`) — queue depth drains proportionally faster with each added worker | | **Parallel processing** |
 
 [... truncated ...]
 
-files are fully buffered** — not true chunked streaming The design document calls all three out honestly in the trade-offs section, which is the right move for a timed assignment.
+"no data loss at any stage" 2. **Idempotency check-then-write is not atomic** — rare but real crash window 3. **Large files are fully buffered** — not true chunked streaming The design document calls all three out honestly in the trade-offs section, which is the right move for a timed assignment.
 
 london: I want you to write script we can run against the docker to prove each of the requirements.
 After it I want you to run the script and take a snapshots to approve we under all the requirements.
@@ -87,8 +85,6 @@ LLM: Pipeline is running. Let me check if the scripts folder is available inside
 LLM: Scripts aren't baked into the image. I'll `docker cp` the script in and run it:
 
 LLM: The container has `worker.py` at the top-level, not as a package. Let me fix the import:
-
-london: [Request interrupted by user for tool use]
 
 london: stop. did you finished the tests ? if so write here the commands
 
@@ -529,8 +525,6 @@ To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLeve
 ────────────────────────────────────────────────────────────────
   4/6 requirements verified
 ================================================================
-
-london: [Request interrupted by user]
 
 london: docker exec -i london-orca-ai-worker-1 python - < scripts/prove_requirements.py
 

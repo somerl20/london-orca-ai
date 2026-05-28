@@ -21,6 +21,10 @@ A production-grade data pipeline that ingests GPS sensor telemetry from a fleet 
 
 📋 [Requirements proof — live test results against the running pipeline](docs/requirements-proof.md)
 
+> "The most critical aspect is designing for parallel processing and large scale, the pipeline must handle many concurrent ships, variable file sizes, and bursty loads while guaranteeing that no data is lost."
+
+📄 [Scalability & reliability analysis — how the pipeline meets this requirement](docs/design/scalability.md)
+
 ---
 
 ## Prerequisites

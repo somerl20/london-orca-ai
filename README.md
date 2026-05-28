@@ -184,7 +184,7 @@ Each worker runs its own PySpark session and writes to Delta Lake concurrently. 
 
 ## Validating Data in the Warehouse
 
-### Option 1 — query script inside a running worker container
+### query script inside a running worker container
 
 ```bash
 # Find the worker container name
@@ -200,15 +200,6 @@ The script prints:
 - 10 most recent rows
 - Row count per ship
 - Average and max pipeline lag (event timestamp → recorded timestamp)
-
-
-### Option 2 — raw SQL queries
-
-Sample queries are in [`analytics/queries/`](analytics/queries/):
-
-- [`ships.sql`](analytics/queries/ships.sql) — per-ship row counts and latest event
-- [`pipeline_health.sql`](analytics/queries/pipeline_health.sql) — lag metrics
-
 
 
 ## Running Tests

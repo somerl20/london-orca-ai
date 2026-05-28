@@ -25,6 +25,8 @@ A production-grade data pipeline that ingests GPS sensor telemetry from a fleet 
 
 📄 [Scalability & reliability analysis — how the pipeline meets this requirement](docs/design/scalability.md)
 
+⚠️ [Known gaps — what was deferred and why](docs/design/gaps.md)
+
 ---
 
 ## Prerequisites

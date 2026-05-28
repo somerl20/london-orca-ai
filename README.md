@@ -6,6 +6,8 @@ A production-grade data pipeline that ingests GPS sensor telemetry from a fleet 
 
 [![E2E pipeline diagram](docs/diagram/e2e.svg)](docs/diagram/pipeline.html)
 
+📄 [Design document — architecture, tool choices, failure handling, trade-offs](docs/design/design.md)
+
 | Requirement | Detail |
 |---|---|
 | **Latency** | Up to 10–15 minutes end-to-end |

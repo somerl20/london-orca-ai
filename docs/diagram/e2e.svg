@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 420">
+  <style>
+    text { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    .title { font-size: 26px; font-weight: 800; fill: #172033; }
+    .label { font-size: 15px; font-weight: 700; fill: #172033; }
+    .sub { font-size: 12px; fill: #647084; }
+    .tiny { font-size: 11px; fill: #647084; }
+    .node { fill: #fff; stroke: #d4ddeb; stroke-width: 1.5; }
+    .node.blue { stroke: #2563eb; }
+    .node.green { stroke: #16a34a; }
+    .node.orange { stroke: #f26b21; }
+    .node.purple { stroke: #7c3aed; }
+    .node.teal { stroke: #0f9f9a; }
+    .topbar.blue { fill: #2563eb; }
+    .topbar.green { fill: #16a34a; }
+    .topbar.orange { fill: #f26b21; }
+    .topbar.purple { fill: #7c3aed; }
+    .topbar.teal { fill: #0f9f9a; }
+    .arrow { stroke: #aab7ca; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+    .arrow.good { stroke: #16a34a; marker-end: url(#arrow-good); }
+    .arrow.warn { stroke: #b7791f; stroke-dasharray: 6 5; marker-end: url(#arrow-warn); }
+    .arrow.retry { stroke: #f26b21; stroke-dasharray: 3 4; marker-end: url(#arrow-retry); }
+    .arrow.bad { stroke: #dc2626; stroke-dasharray: 7 5; marker-end: url(#arrow-bad); }
+    .badge { fill: #eef3fa; stroke: #ccd6e5; stroke-width: 1; }
+    .badge-text { font-size: 11px; font-weight: 800; fill: #40506a; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 z" fill="#aab7ca"/>
+    </marker>
+    <marker id="arrow-good" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrow-warn" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 z" fill="#b7791f"/>
+    </marker>
+    <marker id="arrow-retry" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 z" fill="#f26b21"/>
+    </marker>
+    <marker id="arrow-bad" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0 0 L12 6 L0 12 z" fill="#dc2626"/>
+    </marker>
+
+    <symbol id="trash" viewBox="0 0 24 24">
+      <rect x="3" y="6" width="18" height="15" rx="2" fill="#dc2626" opacity="0.12" stroke="#dc2626" stroke-width="1.5"/>
+      <path d="M1 6h22M8 6V4h8v2" fill="none" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M10 10v7M14 10v7" fill="none" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round"/>
+    </symbol>
+
+    <symbol id="ship" viewBox="0 0 64 64">
+      <rect x="22" y="10" width="20" height="18" rx="2" fill="#2563eb"/>
+      <path d="M12 33h40l-7 13H19z" fill="#3b82f6"/>
+      <path d="M14 48c5 3 9 3 14 0 5 3 9 3 14 0 4 3 8 3 12 0" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round"/>
+      <path d="M28 16h8M18 33l5-8h18l5 8" fill="none" stroke="#dbeafe" stroke-width="3" stroke-linecap="round"/>
+    </symbol>
+
+    <symbol id="s3" viewBox="0 0 64 64">
+      <ellipse cx="32" cy="14" rx="20" ry="8" fill="#16a34a"/>
+      <path d="M12 14v30c0 5 9 9 20 9s20-4 20-9V14" fill="#22c55e"/>
+      <ellipse cx="32" cy="44" rx="20" ry="8" fill="#15803d"/>
+      <path d="M19 24c3 3 8 4 13 4s10-1 13-4M19 34c3 3 8 4 13 4s10-1 13-4" fill="none" stroke="#dcfce7" stroke-width="3" stroke-linecap="round"/>
+      <text x="32" y="47" text-anchor="middle" font-size="11" font-family="Arial" font-weight="700" fill="#fff">S3</text>
+    </symbol>
+
+    <symbol id="rabbitmq" viewBox="0 0 24 24">
+      <rect width="24" height="24" rx="4" fill="#FF6600"/>
+      <path d="M23.035 9.601h-7.677a.956.956 0 01-.962-.962V.962a.956.956 0 00-.962-.956H10.56a.956.956 0 00-.962.956V8.64a.956.956 0 01-.962.962H5.762a.956.956 0 01-.961-.962V.962A.956.956 0 003.839 0H.959a.956.956 0 00-.956.962v22.076A.956.956 0 00.965 24h22.07a.956.956 0 00.962-.962V10.58a.956.956 0 00-.962-.98zm-3.86 8.152a1.437 1.437 0 01-1.437 1.443h-1.924a1.437 1.437 0 01-1.436-1.443v-1.917a1.437 1.437 0 011.436-1.443h1.924a1.437 1.437 0 011.437 1.443z" fill="#fff"/>
+    </symbol>
+
+    <symbol id="spark" viewBox="0 0 24 24">
+      <path d="M10.812 0c-.425.013-.845.215-1.196.605a3.593 3.593 0 00-.493.722c-.355.667-.425 1.415-.556 2.143a551.9 551.9 0 00-.726 4.087c-.027.16-.096.227-.244.273C5.83 8.386 4.06 8.94 2.3 9.514c-.387.125-.773.289-1.114.506-1.042.665-1.196 1.753-.415 2.71.346.422.79.715 1.284.936 1.1.49 2.202.976 3.3 1.47.019.01.036.013.053.019h-.004l1.306.535c0 .023.002.045 0 .073-.2 2.03-.39 4.063-.58 6.095-.04.419-.012.831.134 1.23.317.87 1.065 1.148 1.881.701.372-.204.666-.497.937-.818 1.372-1.623 2.746-3.244 4.113-4.872.111-.133.205-.15.363-.098.349.117.697.231 1.045.347h.001c.02.012.045.02.073.03l.142.042c1.248.416 2.68.775 3.929 1.19.4.132.622.164 1.045.098.311-.048.592-.062.828-.236.602-.33.995-.957.988-1.682-.005-.427-.154-.813-.35-1.186-.82-1.556-1.637-3.113-2.461-4.666-.078-.148-.076-.243.037-.375 1.381-1.615 2.756-3.236 4.133-4.855.272-.32.513-.658.653-1.058.308-.878-.09-1.57-1-1.741a2.783 2.783 0 00-1.235.069c-1.974.521-3.947 1.041-5.918 1.57-.175.047-.26.015-.355-.144a353.08 353.08 0 00-2.421-4.018 4.61 4.61 0 00-.652-.849c-.371-.37-.802-.549-1.227-.536zm.172 3.703a.592.592 0 01.189.211c.87 1.446 1.742 2.89 2.609 4.338.07.118.135.16.277.121 1.525-.41 3.052-.813 4.579-1.217.367-.098.735-.193 1.103-.289a.399.399 0 01-.1.2c-1.259 1.48-2.516 2.962-3.779 4.438-.11.13-.12.22-.04.37.937 1.803 1.768 3.309 2.498 4.76l-3.696-1.019c-.538-.18-1.077-.358-1.615-.539-.163-.055-.25-.03-.36.1-1.248 1.488-2.504 2.97-3.759 4.454a.398.398 0 01-.18.132c.035-.378.068-.757.104-1.136.149-1.572.297-3.144.451-4.716-.03-.318.117-.405-.322-.545-1.493-.593-3.346-1.321-4.816-1.905a.595.595 0 01.24-.134c1.797-.57 3.595-1.14 5.394-1.705.127-.04.199-.092.211-.233.013-.148.05-.294.076-.441.241-1.363.483-2.726.726-4.088.068-.386.14-.771.21-1.157z" fill="#E25A1C"/>
+    </symbol>
+
+    <symbol id="delta" viewBox="0 0 24 24">
+      <path d="M12 2L22 20H2Z" fill="#0075FF"/>
+      <path d="M12 7L19 19H5Z" fill="#fff"/>
+    </symbol>
+  </defs>
+
+  <rect width="1320" height="420" fill="#f6f8fb" rx="8"/>
+
+  <text class="title" x="34" y="48">E2E</text>
+
+  <rect class="node blue" x="36" y="120" width="180" height="120" rx="8"/>
+  <rect class="topbar blue" x="36" y="120" width="180" height="7" rx="4"/>
+  <use href="#ship" x="58" y="145" width="48" height="48"/>
+  <text class="label" x="118" y="164">Generator</text>
+  <text class="sub" x="118" y="185">ships x N</text>
+  <text class="tiny" x="118" y="204">JSON files</text>
+
+  <path class="arrow good" d="M216 180H315"/>
+  <text class="tiny" x="238" y="165">upload</text>
+
+  <rect class="node green" x="318" y="120" width="180" height="120" rx="8"/>
+  <rect class="topbar green" x="318" y="120" width="180" height="7" rx="4"/>
+  <use href="#s3" x="340" y="145" width="48" height="48"/>
+  <text class="label" x="400" y="164">SeaweedFS</text>
+  <text class="sub" x="400" y="185">telemetry/</text>
+  <text class="tiny" x="400" y="204">raw landing</text>
+
+  <path class="arrow good" d="M498 180H597"/>
+  <text class="tiny" x="518" y="165">metadata</text>
+
+  <rect class="node orange" x="600" y="120" width="180" height="120" rx="8"/>
+  <rect class="topbar orange" x="600" y="120" width="180" height="7" rx="4"/>
+  <use href="#rabbitmq" x="622" y="145" width="48" height="48"/>
+  <text class="label" x="682" y="164">RabbitMQ</text>
+  <text class="sub" x="682" y="185">files</text>
+  <text class="tiny" x="682" y="204">durable msg</text>
+
+  <path class="arrow good" d="M780 180H879"/>
+  <text class="tiny" x="805" y="165">consume</text>
+
+  <rect class="node purple" x="882" y="120" width="180" height="120" rx="8"/>
+  <rect class="topbar purple" x="882" y="120" width="180" height="7" rx="4"/>
+  <use href="#spark" x="904" y="145" width="48" height="48"/>
+  <text class="label" x="964" y="164">Worker</text>
+  <text class="sub" x="964" y="185">PySpark</text>
+  <text class="tiny" x="964" y="204">ack after write</text>
+
+  <path class="arrow good" d="M1062 180H1161"/>
+  <text class="tiny" x="1088" y="165">append</text>
+
+  <rect class="node teal" x="1164" y="120" width="120" height="120" rx="8"/>
+  <rect class="topbar teal" x="1164" y="120" width="120" height="7" rx="4"/>
+  <use href="#delta" x="1185" y="145" width="48" height="48"/>
+  <text class="label" x="1224" y="216" text-anchor="middle">Delta Lake</text>
+
+  <path class="arrow warn" d="M408 240V278"/>
+  <use href="#trash" x="388" y="280" width="40" height="40"/>
+  <text class="tiny" x="408" y="336" text-anchor="middle">orphan → TTL</text>
+
+  <path class="arrow retry" d="M970 240V316H692V244"/>
+  <rect class="badge" x="780" y="302" width="182" height="28" rx="13"/>
+  <text class="badge-text" x="871" y="321" text-anchor="middle">retry x-retry-count</text>
+
+  <path class="arrow bad" d="M692 240V352H1140"/>
+  <rect class="node orange" x="1144" y="324" width="120" height="84" rx="8"/>
+  <rect class="topbar orange" x="1144" y="324" width="120" height="7" rx="4"/>
+  <use href="#rabbitmq" x="1188" y="333" width="32" height="32"/>
+  <text class="label" x="1204" y="376" text-anchor="middle">files.dlq</text>
+  <text class="sub" x="1204" y="393" text-anchor="middle">dead letter</text>
+</svg>

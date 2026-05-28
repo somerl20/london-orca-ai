@@ -4,30 +4,7 @@ A production-grade data pipeline that ingests GPS sensor telemetry from a fleet 
 
 ## Architecture
 
-```
-Ships (generator)
-      │
-      ▼ JSON files
-SeaweedFS S3  ──────────────────────────────────────┐
-      │                                             │
-      │ file path published                         │ download file
-      ▼                                             │
-  RabbitMQ (files queue)                            │
-      │                                             │
-      │ consume message                             │
-      ▼                                             │
-  Worker (PySpark)  ◄──────────────────────────────┘
-      │ validate + transform
-      ▼
-  Delta Lake (warehouse)
-      │
-      ├──▶ Spark Thrift Server (JDBC)
-      │          │
-      │          ▼
-      │       Metabase (dashboards)
-      │
-      └──▶ Prometheus / Grafana (pipeline metrics)
-```
+[![E2E pipeline diagram](docs/diagram/e2e.svg)](docs/diagram/pipeline.html)
 
 **Pipeline stages:**
 1. **Generator** — simulates ships by writing JSON files to SeaweedFS and publishing the S3 key to RabbitMQ.

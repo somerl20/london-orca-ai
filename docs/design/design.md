@@ -70,13 +70,18 @@ What was deliberately left lighter: observability (Prometheus wired but no custo
 
 ## 6. Production at 500+ Sources
 
-| Area | Change |
-|---|---|
-| **Spark** | Cluster mode on Kubernetes/YARN — separate driver + executor nodes, no code changes needed |
-| **Delta Lake → Iceberg** | Engine portability + proper catalog (Hive Metastore or REST) for clean write/read separation |
-| **RabbitMQ** | Clustered with quorum queues for HA |
-| **SeaweedFS** | Distributed mode with multiple volume servers for parallel write throughput |
-| **Worker scaling** | Kubernetes HPA keyed on `rabbitmq_queue_messages` depth |
-| **Idempotency** | Single Delta transaction recording data and processed-file marker atomically |
-| **Schema evolution** | Bronze/silver layer — bronze accepts all raw data, silver enforces the typed schema |
-| **Observability** | Structured worker metrics (rows/s, lag, DLQ rate), alerts on queue depth and DLQ growth |
+**Spark → Databricks** — Replace `local[2]` with Databricks (managed Spark). You get auto-scaling, cluster management, and native Delta Lake support with no ops overhead. For teams that don't want to manage Spark infrastructure, Databricks is the pragmatic call. Alternative: self-hosted Spark cluster on Kubernetes/YARN — no code changes required, only the `master("local[2]")` config switches to the cluster URL.
+
+**Delta Lake → stay on Delta (Databricks) or migrate to Iceberg** — If moving to Databricks, Delta Lake remains the natural choice. If the org needs multiple compute engines (Trino, Flink, Spark), migrate to Apache Iceberg with a REST catalog — decouples the table format from the engine so any engine can read and write without going through Spark. Snowflake is a valid alternative if the org already uses it, but comes with per-query cost and storage lock-in.
+
+**SeaweedFS → AWS S3** (or GCS / Azure Blob) — SeaweedFS is the self-hosted substitute used here due to the no-paid-services constraint. In production, replace it with a managed object store. Managed durability, no ops, native TTL lifecycle policies, and scales transparently with 500+ concurrent ship uploads.
+
+**RabbitMQ** — Move from a single broker to a cluster with quorum queues. Quorum queues replicate messages across nodes so a single broker failure doesn't lose in-flight messages or block producers.
+
+**Worker scaling** — Kubernetes HPA keyed on `rabbitmq_queue_messages` depth. When the queue grows, Kubernetes spins up more worker pods automatically; when it drains, it scales back down.
+
+**Idempotency** — Replace the current check-then-write pattern with a single Delta/Iceberg transaction that records both the data rows and the processed file marker atomically. Eliminates the crash window between the two writes.
+
+**Schema evolution** — Introduce a bronze/silver layer. Bronze accepts all raw data as-is. Silver applies the typed schema with explicit migration steps. New measurement types or field changes land in bronze first without breaking the silver pipeline.
+
+**Observability** — Emit structured metrics from the worker (rows/s, processing latency, DLQ rate, S3 delete failures). Set alerts on queue depth growth, DLQ accumulation, and worker crash loops. At 500+ sources a silent failure in one ship's stream is invisible without per-source metrics.

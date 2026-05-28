@@ -191,8 +191,7 @@ Each worker runs its own PySpark session and writes to Delta Lake concurrently. 
 docker-compose ps
 
 # Run the validation script
-docker exec -it london-orca-ai-worker-1 \
-  python3 /app/scripts/query_measurements.py
+docker exec -i london-orca-ai-worker-1 python - < scripts/query_measurements.py 
 ```
 
 The script prints:

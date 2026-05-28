@@ -46,9 +46,11 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_started
+      worker:
+        condition: service_healthy
     environment:
       SOURCES: "10"
-      RATE: "2"
+      RATE: "0.2"
       SIZE: "small"
       RATE_JITTER: "0.3"
       SIZE_RANDOM: "false"
@@ -89,6 +91,11 @@ services:
         reservations:
           cpus: "0.5"
           memory: 512M
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/worker_ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     restart: on-failure
 
   # ─── Monitoring: Prometheus ───────────────────────────────────────────────────
@@ -111,42 +118,30 @@ services:
     profiles:
       - monitoring
     ports:
-      - "3000:3000"   # UI → http://localhost:3000  (admin / admin)
+      - "3030:3000"   # UI → http://localhost:3030  (admin / admin)
     depends_on:
       - prometheus
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - delta-warehouse:/data/warehouse
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: ""
 
-  # ─── Analytics: Spark Thrift Server ──────────────────────────────────────────
-  spark-thrift:
-    build: ./warehouse/spark-thrift
-    profiles:
-      - analytics
-    ports:
-      - "10000:10000"  # JDBC → Metabase: host=localhost port=10000
-    volumes:
-      - delta-warehouse:/data/warehouse
-    environment:
-      WAREHOUSE_PATH: "/data/warehouse"
-    restart: on-failure
-
-  # ─── Analytics: Metabase ─────────────────────────────────────────────────────
+  # ─── Analytics: Metabase + DuckDB ────────────────────────────────────────────
   metabase:
-    image: metabase/metabase:latest
+    build: ./analytics/metabase
     profiles:
       - analytics
     ports:
-      - "3010:3000"   # UI → http://localhost:3010
-    depends_on:
-      - spark-thrift
+      - "3030:3000"   # UI → http://localhost:3030  (via DuckDB → Delta Lake)
     volumes:
       - metabase-data:/metabase-data
+      - delta-warehouse:/data/warehouse
     environment:
       MB_DB_TYPE: h2
       MB_DB_FILE: /metabase-data/metabase.db

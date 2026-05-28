@@ -19,6 +19,8 @@ A production-grade data pipeline that ingests GPS sensor telemetry from a fleet 
 | **Error handling** | Failures at any stage must not cause data loss |
 | **Schema validation** | Pipeline must tolerate schema changes gracefully |
 
+📋 [Requirements proof — live test results against the running pipeline](docs/requirements-proof.md)
+
 ---
 
 ## Prerequisites

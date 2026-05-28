@@ -240,6 +240,7 @@ def main() -> None:
     warehouse_path = os.environ.get("WAREHOUSE_PATH", "/data/warehouse")
 
     spark = build_spark()
+    open("/tmp/worker_ready", "w").close()  # signal Docker healthcheck
     s3 = make_s3()
     conn = wait_for_rabbitmq(rmq_url)
     ch = conn.channel()

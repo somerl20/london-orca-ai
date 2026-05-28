@@ -152,12 +152,31 @@ S3 delete is suppressed so the file remains accessible on the second delivery, s
 
 ## Running the Tests
 
+Install dependencies first:
+
+```bash
+# macOS / Linux / WSL2
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-test.txt
+
+# Windows PowerShell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-test.txt
+```
+
+> **Windows:** PySpark requires Java — `winget install EclipseAdoptium.Temurin.17.JDK`, then set `JAVA_HOME` and add `%JAVA_HOME%\bin` to `PATH`.
+
 ```bash
 # Fast suite — runs on every git commit
 pytest -m "not slow"
 
 # Full suite including Docker-based integration tests
 pytest
+
+# With coverage
+pytest --cov=. --cov-report=term-missing
 
 # A single layer
 pytest transformations/tests/test_worker.py

@@ -6,14 +6,6 @@ A production-grade data pipeline that ingests GPS sensor telemetry from a fleet 
 
 [![E2E pipeline diagram](docs/diagram/e2e.svg)](docs/diagram/pipeline.html)
 
-**Pipeline stages:**
-1. **Generator** — simulates ships by writing JSON files to SeaweedFS and publishing the S3 key to RabbitMQ.
-2. **Worker** — consumes messages from RabbitMQ, downloads the file from SeaweedFS, validates the schema, transforms with PySpark, appends to a partitioned Delta Lake table, then deletes the raw file. Failed messages are retried up to `RETRY_MAX` times before being routed to a dead-letter queue (`files.dlq`).
-3. **Delta Lake** — columnar, ACID-compliant storage. Partitioned by `source_id` for efficient per-ship queries.
-4. **Analytics** — Spark Thrift Server exposes the Delta table over JDBC; Metabase connects for visual exploration.
-5. **Monitoring** — Prometheus scrapes RabbitMQ and worker metrics; Grafana visualises pipeline health.
-
----
 
 ## Prerequisites
 
@@ -63,32 +55,15 @@ Then restart WSL: `wsl --shutdown` in PowerShell.
 
 ```bash
 # 1. Clone the repository
-git clone <repo-url>
+git clone git@github.com:somerl20/london-orca-ai.git
 cd london-orca-ai
 
 # 2. Start the core pipeline (generator + broker + worker + object store)
-docker compose up
+docker-compose up
 ```
 
 That's it. The generator starts producing ship files immediately. The worker consumes and transforms them into Delta Lake.
 
-To run with **monitoring** (Prometheus + Grafana):
-
-```bash
-docker compose --profile monitoring up
-```
-
-To run with **analytics** (Spark Thrift + Metabase):
-
-```bash
-docker compose --profile analytics up
-```
-
-To run **everything**:
-
-```bash
-docker compose --profile monitoring --profile analytics up
-```
 
 ---
 
@@ -112,10 +87,10 @@ The generator simulates a fleet of ships. It is configured via environment varia
 
 ```bash
 # 20 ships, medium-sized files, 1 file/min
-docker compose up -e SOURCES=20 -e SIZE=medium -e RATE=1
+docker-compose up -e SOURCES=20 -e SIZE=medium -e RATE=1
 
 # Large files to stress-test chunking
-docker compose up -e SIZE=large -e RATE=0.5
+docker-compose up -e SIZE=large -e RATE=0.5
 ```
 
 | Variable | Default | Description |
@@ -128,11 +103,21 @@ docker compose up -e SIZE=large -e RATE=0.5
 | `S3_BUCKET` | `telemetry` | Target S3 bucket in SeaweedFS |
 | `RABBITMQ_QUEUE` | `files` | Queue where file keys are published |
 
-**File naming convention:**
+**File example** — `ship-42_gps_2026-05-23T10:14:00Z.json`:
 
-```
-{source_id}_{measurement}_{timestamp_utc}.json
-# e.g. ship-42_gps_20260523T101400Z.json
+```json
+[
+  {
+    "source_id": "ship-42",
+    "measurement": "gps",
+    "timestamp": "2026-05-23T10:14:00Z",
+    "values": {
+      "lat": 32.08,
+      "lon": 34.78,
+      "speed_knots": 12.4
+    }
+  }
+]
 ```
 
 ### Running the generator locally (without Docker)
@@ -163,10 +148,10 @@ Workers consume from RabbitMQ in parallel. Scale horizontally to increase throug
 
 ```bash
 # Start 3 workers
-docker compose up --scale worker=3
+docker-compose up --scale worker=3
 
 # Scale up while the pipeline is already running
-docker compose up --scale worker=5 --no-recreate
+docker-compose up --scale worker=5 --no-recreate
 ```
 
 Each worker runs its own PySpark session and writes to Delta Lake concurrently. Delta's optimistic concurrency control handles simultaneous appends safely.
@@ -179,7 +164,7 @@ Each worker runs its own PySpark session and writes to Delta Lake concurrently. 
 
 ```bash
 # Find the worker container name
-docker compose ps
+docker-compose ps
 
 # Run the validation script
 docker exec -it london-orca-ai-worker-1 \
@@ -227,59 +212,13 @@ Start with `--profile monitoring`, then open Grafana at http://localhost:3000 (`
 |---|---|
 | `rabbitmq_queue_messages` (`files`) | Backlog — if growing, workers are falling behind |
 | `rabbitmq_queue_messages` (`files.dlq`) | Poisoned/unprocessable messages |
-| Worker restart count (`docker compose ps`) | Repeated crashes indicate persistent failures |
+| Worker restart count (`docker-compose ps`) | Repeated crashes indicate persistent failures |
 
 ---
 
 ## Running Tests
 
-Install test dependencies first:
-
-```bash
-# macOS / Linux / WSL2
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-test.txt
-
-# Windows PowerShell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements-test.txt
-```
-
-> **Windows note:** PySpark requires Java. Install the JDK:
-> `winget install EclipseAdoptium.Temurin.17.JDK`
-> Then set `JAVA_HOME` to the JDK path and add `%JAVA_HOME%\bin` to `PATH`.
-
-Run the full test suite:
-
-```bash
-pytest
-```
-
-Run only fast unit tests (no containers required):
-
-```bash
-pytest tests/test_ship_to_warehouse.py -v
-```
-
-Run resilience tests (requires Docker — starts a real RabbitMQ container):
-
-```bash
-pytest tests/test_resilience.py -v
-```
-
-Run end-to-end tests:
-
-```bash
-pytest tests/test_e2e.py -v
-```
-
-Run with coverage:
-
-```bash
-pytest --cov=. --cov-report=term-missing
-```
+See [docs/testing.md](docs/testing.md) for the full test strategy, setup instructions, and how to run each layer.
 
 ---
 
@@ -326,43 +265,7 @@ london-orca-ai/
 
 ## Troubleshooting
 
-**Worker exits immediately on startup**
-
-```bash
-docker compose logs worker
-```
-
-Common causes: RabbitMQ not yet ready (the healthcheck retries for up to 100 s), or SeaweedFS bucket not created yet. The `restart: on-failure` policy will retry automatically.
-
-**`java.lang.OutOfMemoryError` in worker logs**
-
-Increase Docker Desktop memory to at least 6 GB (see Prerequisites).
-
-**SeaweedFS S3 returns 403**
-
-The bucket must exist before the generator uploads. The generator creates it on startup; if it races, restarting the generator container resolves it:
-
-```bash
-docker compose restart generator
-```
-
-**Windows: `python` command not found**
-
-Use `py` instead of `python`, or add the Python installation directory to your `PATH` in System Settings → Environment Variables.
-
-**Windows: `JAVA_HOME` not set error when running tests locally**
-
-```powershell
-# PowerShell — set for the current session
-$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.x-hotspot"
-$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
-```
-
-Add these to your PowerShell profile (`$PROFILE`) to persist across sessions.
-
-**Port already in use**
-
-Stop any local services on the conflicting port, or override the host port in `docker-compose.yml`. Common conflicts: port `5672` (local RabbitMQ), `8080` (other HTTP servers).
+See [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ---
 
@@ -370,8 +273,8 @@ Stop any local services on the conflicting port, or override the host port in `d
 
 ```bash
 # Stop all containers
-docker compose down
+docker-compose down
 
 # Stop and remove all volumes (deletes all ingested data)
-docker compose down -v
+docker-compose down -v
 ```

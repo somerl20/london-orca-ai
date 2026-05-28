@@ -48,8 +48,6 @@ Three stages with clear boundaries:
 
 **Test coverage as a safety net** — Unit, E2E, and resilience tests covering crash recovery, duplicates, schema errors, and bursty load — so the correctness claims are verified, not just asserted (see [testing.md](../testing.md)).
 
-What was deliberately left lighter: observability (Prometheus wired but no custom worker metrics), schema evolution (only GPS fields projected), and large-file chunking (see [gaps.md](gaps.md)).
-
 ---
 
 ## 5. Trade-offs

@@ -222,31 +222,15 @@ See [docs/testing.md](docs/testing.md) for the full test strategy, setup instruc
 
 ---
 
+## Continuous Integration - CI
+
+CI runs on every `git commit` via a pre-commit hook. It executes the fast test suite (`pytest -m "not slow"`) — unit tests and in-process E2E tests that need no Docker. The commit is blocked if any test fails. Slow tests (Docker-based resilience and real-broker tests) can be run manually; see [docs/testing.md](docs/testing.md).
+
+---
+
 ## Repository Layout
 
-```
-london-orca-ai/
-├── generator/              # Ship simulator (Python + Dockerfile)
-│   └── src/generator/
-├── transformations/        # PySpark transform worker (Python + Dockerfile)
-│   └── src/worker/
-├── warehouse/
-│   └── spark-thrift/       # Spark Thrift Server Dockerfile
-├── analytics/
-│   └── queries/            # Sample SQL queries for Delta Lake
-├── monitoring/
-│   ├── prometheus/         # prometheus.yml scrape config
-│   └── grafana/            # Provisioning + dashboards
-├── datalake/
-│   └── seaweedfs/          # SeaweedFS S3 bucket config
-├── infra/
-│   └── compose/            # Modular Compose files (core / monitoring / analytics)
-├── scripts/
-│   └── query_measurements.py  # Ad-hoc Delta Lake query script
-├── tests/                  # Test suite (unit + resilience + e2e)
-├── docs/                   # Component design documents
-└── docker-compose.yml      # Root convenience Compose file (profiles)
-```
+See [docs/layout.md](docs/layout.md).
 
 ---
 

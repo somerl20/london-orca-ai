@@ -1,5 +1,4 @@
 # Conversation 1
-Date: May 27, 2026 10:21 UTC
 ---
 
 london: read the files. it's an home assignment for job in Orca-AI.

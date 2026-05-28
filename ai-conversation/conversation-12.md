@@ -1,5 +1,4 @@
 # Conversation 12
-Date: May 28, 2026 05:41 UTC
 ---
 
 london: in this thread I want to go in baby steps. so be concise and don't start without approvement.

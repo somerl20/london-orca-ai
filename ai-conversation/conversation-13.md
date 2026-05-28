@@ -1,5 +1,4 @@
 # Conversation 13
-Date: May 28, 2026 08:18 UTC
 ---
 
 london: cd to /Users/omerlondon/Documents/projects/orca-ai/london-orca-ai

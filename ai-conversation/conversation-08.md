@@ -1,5 +1,4 @@
 # Conversation 8
-Date: May 27, 2026 20:07 UTC
 ---
 
 london: go over the repo and and add folder diagram under docs and add a detailed html diagram for the:

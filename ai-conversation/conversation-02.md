@@ -1,5 +1,4 @@
 # Conversation 2
-Date: May 27, 2026 14:07 UTC
 ---
 
 london: Just to make sure you located in the right place, what did you get from running pwd ?

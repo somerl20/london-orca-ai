@@ -1,5 +1,4 @@
 # Conversation 5
-Date: May 27, 2026 18:48 UTC
 ---
 
 london: Look at docker-compose.yml and at transformations 
